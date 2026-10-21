@@ -1,0 +1,90 @@
+# docker compose lokal (Fase 1): app + postgres + redis + rabbitmq
+# Jalankan dari root repo:
+#   docker compose -f deploy/docker/docker-compose.yml up -d --build
+name: corebank-api
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: runtime
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: postgresql+psycopg://corebank:corebank@postgres:5432/corebank
+      REDIS_URL: redis://redis:6379/0
+      AMQP_URL: amqp://guest:guest@rabbitmq:5672/
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Service terisolasi untuk test (profile "test"): docker compose --profile test run --rm app-test
+  app-test:
+    profiles: ["test"]
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+      target: test
+    environment:
+      APP_ENV: test
+      DATABASE_URL: postgresql+psycopg://corebank:corebank@postgres:5432/corebank
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: corebank
+      POSTGRES_PASSWORD: corebank
+      POSTGRES_DB: corebank
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U corebank -d corebank"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672" # management UI: http://localhost:15672 (guest/guest)
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redis-data:
+  rabbitmq-data:
