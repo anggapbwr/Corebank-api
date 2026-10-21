@@ -2,7 +2,7 @@
 
 from fastapi import FastAPI
 
-from app.api.routes import accounts, auth, customers, health
+from app.api.routes import accounts, approvals, audit, auth, customers, health, transfers
 from app.core.config import get_settings
 
 
@@ -17,6 +17,9 @@ def create_app() -> FastAPI:
     application.include_router(auth.router)
     application.include_router(customers.router)
     application.include_router(accounts.router)
+    application.include_router(transfers.router)
+    application.include_router(approvals.router)
+    application.include_router(audit.router)
     return application
 
 

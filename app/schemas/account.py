@@ -1,6 +1,7 @@
 """Skema rekening & ledger."""
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -30,6 +31,6 @@ class LedgerEntryOut(BaseModel):
     direction: str
     amount: Decimal
     balance_after: Decimal
-    created_at: str
+    created_at: datetime
 
     model_config = {"from_attributes": True}

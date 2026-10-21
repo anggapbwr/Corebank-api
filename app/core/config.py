@@ -1,5 +1,6 @@
 """Application settings — dibaca dari env / .env (pydantic-settings)."""
 
+from decimal import Decimal
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -22,6 +23,13 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
+
+    # Approval matrix (BR-07) — CONFIG, bukan hardcode; bisa diganti tanpa deploy
+    approval_direct_execute_max: Decimal = Decimal("50000000")  # ≤ 50jt: eksekusi langsung
+    approval_supervisor_max: Decimal = Decimal("250000000")  # ≤ 250jt: supervisor cukup
+    # > supervisor_max → eskalasi ke manager
+
+    idempotency_ttl_seconds: int = 86400  # 24 jam — retry window
 
     @property
     def psycopg_dsn(self) -> str:
