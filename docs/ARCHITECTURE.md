@@ -2,6 +2,10 @@
 
 Dokumen desain: arsitektur menyeluruh, keputusan teknologi (ADR), dan alur data.
 
+> **Status implementasi:** Fase 1 (foundation) sudah jalan — FastAPI + `/healthz` + `/readyz`
+> + settings pydantic + Docker Compose stack. Komponen lain (services, MQ consumer,
+> K8s) sesuai roadmap; diagram di bawah adalah *target arsitektur*.
+
 ---
 
 ## 1. Arsitektur Logis (Monolith Modular)
