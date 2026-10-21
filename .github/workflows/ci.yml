@@ -93,7 +93,7 @@ jobs:
 
       # Supply chain: scan SEBELUM push — image berisiko tidak boleh terbit
       - name: Trivy scan (CRITICAL/HIGH = gagal)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: corebank-api:ci
           format: table
