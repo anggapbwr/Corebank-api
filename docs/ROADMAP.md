@@ -1,4 +1,4 @@
-# Roadmap — 8 Fase
+# Roadmap — 9 Fase
 
 Urutan pengerjaan dengan acceptance criteria (AC) per fase. **Tidak lanjut ke fase berikut sebelum AC hijau.**
 
@@ -45,20 +45,30 @@ Urutan pengerjaan dengan acceptance criteria (AC) per fase. **Tidak lanjut ke fa
 - Alertmanager → bot Telegram (error rate, queue backlog)
 - **AC:** simulasi beban → dashboard menunjukkan grafik; matikan postgres → alert masuk Telegram
 
-## Fase 6 — Kubernetes (kind)
+## Fase 6 — Dashboard Workbench (UI)
+**Goal:** layar kerja harian — kesehatan sistem + alert di satu halaman, tanpa login.
+- Server-rendered **Jinja + HTMX** (tanpa build chain JS; `htmx.min.js` di-vendor di `app/static/`)
+- `GET /` — dashboard: kartu System Health + **panel alert di kanan** (lonceng + badge)
+- `GET /api/system/health` — gauge monitor → JSON; `GET /api/system/alerts` — proxy Alertmanager
+  (UI tidak memanggil Alertmanager langsung; AM mati → panel kasih tahu, tidak pernah 500)
+- Polling HTMX ke `/fragments/*` (health 15 dtk, alert 20 dtk); jalur `/metrics` tetap terpisah
+- Loop factory khusus Windows (`app/core/loops.py`) — uvicorn ≥0.36 default Proactor, psycopg async menolak
+- **AC:** buka `/` langsung dashboard (tanpa login); Alertmanager mati → panel menampilkan kondisi down tanpa error; alert firing → muncul di panel kanan terurut severity; `pytest` + coverage gate 80% tetap hijau
+
+## Fase 7 — Kubernetes (kind)
 **Goal:** infra as code penuh.
 - kind cluster lokal
 - Manifests: Deployment, Service, Ingress, ConfigMap, Secret, HPA (opsional)
 - Liveness & readiness probe (bedakan: "hidup" vs "siap terima trafik")
 - **AC:** `kubectl apply` → API jalan di cluster; matikan 1 pod → traffic pindah tanpa error (self-healing)
 
-## Fase 7 — CD & Zero-Downtime Deploy
+## Fase 8 — CD & Zero-Downtime Deploy
 **Goal:** deploy seperti tim produksi.
 - Pipeline CD: image baru → rolling update → smoke test otomatis → rollback kalau gagal
 - Blue-green atau canary (pilih salah satu, disimulasikan)
 - **AC:** deploy versi baru saat load test jalan → tidak ada request gagal (zero downtime)
 
-## Fase 8 — Hardening & DR
+## Fase 9 — Hardening & DR
 **Goal:** ketahanan (bagian " membosankan" yang membedakan amatir vs profesional).
 - Backup harian (pg_dump ke volume terpisah) + **restore drill** (RPO/RTO NFR-07)
 - Reconciliation job: Σ ledger vs account.balance → alert kalau mismatch
@@ -68,8 +78,8 @@ Urutan pengerjaan dengan acceptance criteria (AC) per fase. **Tidak lanjut ke fa
 
 ---
 
-## Setelah Fase 8 (opsional / lanjutan)
-- Dashboard monitoring per role (workbench) di atas data yang sudah ada
+## Setelah Fase 9 (opsional / lanjutan)
+- My Work per role (lanjutan Fase 6: queue per role, approve/reject dari UI)
 - HashiCorp Vault untuk secrets
 - Terraform ke cloud free-tier (AWS/GCP) — deploy cluster beneran
 - Microsplit: ledger service terpisah kalau ada alasan nyata

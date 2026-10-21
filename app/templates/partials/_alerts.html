@@ -1,0 +1,21 @@
+<h2>
+  🔔 Alerts
+  {% if alerts.alerts %}
+    <span class="count">{{ alerts.alerts | length }}</span>
+  {% else %}
+    <span class="count zero">0</span>
+  {% endif %}
+</h2>
+{% if alerts.alertmanager == "down" %}
+  <div class="down">Alertmanager tidak terjangkau — daftar alert tidak bisa diperbarui.</div>
+{% elif alerts.alerts %}
+  {% for a in alerts.alerts %}
+    <div class="alert {{ a.severity }}">
+      <div class="name">{{ a.name }}<span class="sev">{{ a.severity | upper }}</span></div>
+      <div>{{ a.summary }}</div>
+      <div class="meta">sejak {{ (a.starts_at or "")[:16] | replace("T", " ") }}</div>
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="empty">Tidak ada alert aktif ✓</div>
+{% endif %}

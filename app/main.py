@@ -3,10 +3,22 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import accounts, approvals, audit, auth, customers, health, transfers
+from app.api.routes import (
+    accounts,
+    approvals,
+    audit,
+    auth,
+    customers,
+    health,
+    system,
+    transfers,
+    web,
+)
 from app.core.config import get_settings
 from app.core.observability import ObservabilityMiddleware, monitor_loop, setup_logging
 
@@ -33,7 +45,13 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     application.add_middleware(ObservabilityMiddleware)
+    # Aset statis dashboard (Fase 6): htmx.min.js di-vendor → tanpa CDN/build step
+    static_dir = Path(__file__).resolve().parent / "static"
+    if static_dir.is_dir():
+        application.mount("/static", StaticFiles(directory=static_dir), name="static")
     application.include_router(health.router)
+    application.include_router(system.router)  # JSON untuk dashboard — sebelum web
+    application.include_router(web.router)
     application.include_router(auth.router)
     application.include_router(customers.router)
     application.include_router(accounts.router)

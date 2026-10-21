@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+  <h1>System Health</h1>
+  <div id="health-panel"
+       hx-get="/fragments/health" hx-trigger="every 15s" hx-swap="innerHTML">
+    {% include "partials/_health.html" %}
+  </div>
+  <p class="note">
+    Kartu diperbarui otomatis tiap 15 detik (gauge monitor), panel alert tiap 20 detik.
+  </p>
+{% endblock %}

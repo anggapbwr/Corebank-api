@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
 
+    # Alertmanager (Fase 6) — dashboard mem-proxy /api/v2/alerts lewat backend,
+    # UI tidak memanggil Alertmanager langsung (auth & CORS ribet)
+    alertmanager_url: str = "http://localhost:9093"
+
     # Approval matrix (BR-07) — CONFIG, bukan hardcode; bisa diganti tanpa deploy
     approval_direct_execute_max: Decimal = Decimal("50000000")  # ≤ 50jt: eksekusi langsung
     approval_supervisor_max: Decimal = Decimal("250000000")  # ≤ 250jt: supervisor cukup

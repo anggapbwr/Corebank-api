@@ -20,8 +20,9 @@ double-entry ledger, idempotency, RBAC, approval workflow, CI/CD, Kubernetes, ob
 | Transfer atomic + idempotency | ✅ | Redis SETNX + UNIQUE column (BR-03); approval matrix dari config; work queue + eskalasi; audit trail |
 | CI/CD (GitHub Actions → GHCR) | ✅ | ruff → pytest (coverage gate 80%) → docker build → Trivy scan → push GHCR |
 | Observability (Prometheus/Grafana/Loki) | ✅ | metrics HTTP+bisnis, log JSON+correlation ID, alert DB mati → Alertmanager/Telegram |
-| Kubernetes (kind) + zero-downtime | 🚧 Fase 6–7 | readiness/liveness probe, rolling update + auto rollback |
-| Hardening (backup/restore, load test) | 🚧 Fase 8 | RPO/RTO restore drill, k6, OWASP review |
+| Dashboard workbench (Jinja + HTMX) | ✅ | tanpa login; kartu System Health + panel alert kanan (proxy Alertmanager) |
+| Kubernetes (kind) + zero-downtime | 🚧 Fase 7–8 | readiness/liveness probe, rolling update + auto rollback |
+| Hardening (backup/restore, load test) | 🚧 Fase 9 | RPO/RTO restore drill, k6, OWASP review |
 
 ## 🏗️ Arsitektur (target)
 
@@ -81,6 +82,9 @@ docker compose -f deploy/docker/docker-compose.yml down
 
 | URL | Isi |
 |---|---|
+| `http://localhost:8000/` | **Dashboard workbench** — System Health + panel alert (kanan) |
+| `http://localhost:8000/api/system/health` | Gauge monitor → JSON (db/redis/antrean) |
+| `http://localhost:8000/api/system/alerts` | Proxy Alertmanager → JSON alert aktif |
 | `http://localhost:8000/docs` | Swagger UI interaktif |
 | `http://localhost:8000/healthz` | Liveness — proses hidup? (tanpa cek dependency) |
 | `http://localhost:8000/readyz` | Readiness — Postgres+Redis siap terima trafik? |
@@ -106,6 +110,11 @@ docker compose -f deploy/docker/docker-compose.yml --profile test run --rm app-t
 pip install pre-commit && pre-commit install
 ```
 
+> **Windows + uvicorn lokal:** uvicorn ≥0.36 memakai `ProactorEventLoop` yang ditolak
+> psycopg async (monitor DB & semua rute SQLAlchemy gagal — `InterfaceError`). Jalankan dengan:
+> `uvicorn app.main:app --loop app.core.loops:selector_loop_factory`
+> (container Linux tidak terpengaruh — Dockerfile tanpa flag ini.)
+
 ## 📁 Struktur
 
 ```
@@ -113,7 +122,9 @@ corebank-api/
 ├── app/
 │   ├── main.py              # FastAPI entrypoint
 │   ├── core/config.py       # settings (env/.env) — pydantic-settings
-│   ├── api/routes/          # health (+ auth, accounts, transfers nanti)
+│   ├── api/routes/          # health, system, web/dashboard (+ auth, accounts, transfers)
+│   ├── templates/           # Jinja — dashboard workbench (Fase 6)
+│   ├── static/              # htmx.min.js di-vendor (tanpa CDN/build)
 │   ├── models/              # SQLAlchemy (Fase 2)
 │   ├── schemas/             # Pydantic request/response (Fase 2)
 │   └── services/            # domain logic: transfer, ledger, approval (Fase 2–3)
@@ -122,7 +133,7 @@ corebank-api/
 ├── docs/                    # ⭐ kontrak desain — baca sebelum sentuh kode
 ├── deploy/
 │   ├── docker/              # Dockerfile multi-stage + docker-compose.yml ✅
-│   ├── k8s/                 # manifests K8s (Fase 6)
+│   ├── k8s/                 # manifests K8s (Fase 7)
 │   └── monitoring/          # prometheus/grafana/loki/alertmanager (Fase 5)
 ├── .github/workflows/       # CI/CD (Fase 4)
 └── pyproject.toml           # deps + ruff + pytest config
@@ -137,9 +148,10 @@ corebank-api/
 | 3 | Transfer + Idempotency + Approval workflow | ✅ **Selesai** — 26 test passed (lokal & container), smoke 9/9; BR-01..10 terbukti termasuk eskalasi 400jt → manager |
 | 4 | Testing & CI (GitHub Actions → GHCR) | ✅ **Selesai** — lint + pytest coverage gate 80% (lokal 87%) + Trivy scan + push `sha-<7digit>` ke GHCR |
 | 5 | Observability (Prometheus/Grafana/Loki/Alert) | ✅ **Selesai** — verifikasi 8/8: rate/latency terukur, dashboard terprovision, log → Loki, **mati Postgres → alert firing → resolve** |
-| 6 | Kubernetes (kind): probe, ConfigMap/Secret | ⬜ |
-| 7 | CD: rolling update + auto rollback | ⬜ |
-| 8 | Hardening: backup/restore drill, k6, OWASP | ⬜ |
+| 6 | Dashboard Workbench (Jinja+HTMX, tanpa login) | ✅ **Selesai** — verifikasi 3/3 skenario live: sehat, AM mati (graceful), alert firing → panel kanan; 39 test, coverage 86% |
+| 7 | Kubernetes (kind): probe, ConfigMap/Secret | ⬜ |
+| 8 | CD: rolling update + auto rollback | ⬜ |
+| 9 | Hardening: backup/restore drill, k6, OWASP | ⬜ |
 
 Acceptance criteria tiap fase: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
@@ -151,7 +163,7 @@ Semua keputusan desain ada di `docs/`, dibuat **sebelum kode** (prinsip: dokumen
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — arsitektur logis, sequence transfer, 9 ADR
 - [`docs/ERD.md`](docs/ERD.md) — 7 tabel + alasan tiap keputusan desain
 - [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) — role, work queue, state machine, contoh eskalasi Rp 400 juta
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — 8 fase + acceptance criteria
+- [`docs/ROADMAP.md`](docs/ROADMAP.md) — 9 fase + acceptance criteria
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — aturan Git, kode, DB, testing, logging
 
 ## 📜 Prinsip Inti (non-negotiable)

@@ -172,8 +172,11 @@ async def check_dependencies() -> None:
         conn = await psycopg.AsyncConnection.connect(settings.psycopg_dsn, connect_timeout=3)
         await conn.close()
         DB_UP.set(1)
-    except Exception:  # noqa: BLE001
-        logging.getLogger("corebank.monitor").error("PostgreSQL TIDAK terjangkau")
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger("corebank.monitor").error(
+            "PostgreSQL TIDAK terjangkau",
+            extra={"error": type(exc).__name__, "detail": str(exc)},
+        )
         DB_UP.set(0)
 
     try:
