@@ -1,0 +1,21 @@
+# kind cluster — Fase 7 (Kubernetes).
+# Pakai: kind create cluster --config deploy/k8s/kind-config.yaml
+# (apply.sh membuat cluster ini otomatis kalau belum ada)
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: corebank
+nodes:
+  - role: control-plane
+    # ingress-nginx jalan di control-plane (hostPort) — label ini dipakai
+    # nodeSelector controller: ingress-ready=true
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # nginx ingress (port 80 di dalam node) → host
+      - containerPort: 80
+        hostPort: 8080
+        protocol: TCP

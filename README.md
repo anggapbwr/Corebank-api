@@ -21,7 +21,8 @@ double-entry ledger, idempotency, RBAC, approval workflow, CI/CD, Kubernetes, ob
 | CI/CD (GitHub Actions → GHCR) | ✅ | ruff → pytest (coverage gate 80%) → docker build → Trivy scan → push GHCR |
 | Observability (Prometheus/Grafana/Loki) | ✅ | metrics HTTP+bisnis, log JSON+correlation ID, alert DB mati → Alertmanager/Telegram |
 | Dashboard workbench (Jinja + HTMX) | ✅ | tanpa login; kartu System Health + panel alert kanan (proxy Alertmanager) |
-| Kubernetes (kind) + zero-downtime | 🚧 Fase 7–8 | readiness/liveness probe, rolling update + auto rollback |
+| Kubernetes (kind) | ✅ | cluster lokal + ingress-nginx; probes liveness/readiness; 2 replica; migrasi = Job terpisah |
+| Zero-downtime CD (rolling + rollback) | 🚧 Fase 8 | readiness/liveness probe, rolling update + auto rollback |
 | Hardening (backup/restore, load test) | 🚧 Fase 9 | RPO/RTO restore drill, k6, OWASP review |
 
 ## 🏗️ Arsitektur (target)
@@ -78,6 +79,19 @@ curl http://localhost:8000/readyz    # {"status":"ready","checks":{"database":"o
 docker compose -f deploy/docker/docker-compose.yml down
 ```
 
+**Kubernetes (kind) — Fase 7:** (prasyarat: `kind`; `kubectl` ikut Docker Desktop)
+
+```bash
+docker build -t corebank-api:kind -f deploy/docker/Dockerfile --target runtime .
+bash deploy/k8s/apply.sh     # cluster + ingress-nginx + datastore + migrasi (Job) + app
+# → http://localhost:8080/   (dashboard & API lewat ingress)
+
+kind delete cluster --name corebank   # bersihkan cluster (PVC ikut terhapus)
+```
+
+`apply.sh` idempoten — jalankan ulang untuk menerapkan perubahan manifest
+(migrasi diulang tiap run, secret JWT tidak dirotasi otomatis).
+
 **Endpoint lokal:**
 
 | URL | Isi |
@@ -88,6 +102,7 @@ docker compose -f deploy/docker/docker-compose.yml down
 | `http://localhost:8000/docs` | Swagger UI interaktif |
 | `http://localhost:8000/healthz` | Liveness — proses hidup? (tanpa cek dependency) |
 | `http://localhost:8000/readyz` | Readiness — Postgres+Redis siap terima trafik? |
+| `http://localhost:8080` | API + dashboard via **ingress di cluster kind** (Fase 7) |
 | `http://localhost:15672` | RabbitMQ management UI (guest/guest) |
 | `http://localhost:9090` | Prometheus — query metrics & alert |
 | `http://localhost:3000` | Grafana — dashboard (admin/admin), folder *CoreBank* |
@@ -133,7 +148,7 @@ corebank-api/
 ├── docs/                    # ⭐ kontrak desain — baca sebelum sentuh kode
 ├── deploy/
 │   ├── docker/              # Dockerfile multi-stage + docker-compose.yml ✅
-│   ├── k8s/                 # manifests K8s (Fase 7)
+│   ├── k8s/                 # Fase 7 ✅: kind-config, manifest (00..40), apply.sh, ingress-nginx
 │   └── monitoring/          # prometheus/grafana/loki/alertmanager (Fase 5)
 ├── .github/workflows/       # CI/CD (Fase 4)
 └── pyproject.toml           # deps + ruff + pytest config
@@ -149,7 +164,7 @@ corebank-api/
 | 4 | Testing & CI (GitHub Actions → GHCR) | ✅ **Selesai** — lint + pytest coverage gate 80% (lokal 87%) + Trivy scan + push `sha-<7digit>` ke GHCR |
 | 5 | Observability (Prometheus/Grafana/Loki/Alert) | ✅ **Selesai** — verifikasi 8/8: rate/latency terukur, dashboard terprovision, log → Loki, **mati Postgres → alert firing → resolve** |
 | 6 | Dashboard Workbench (Jinja+HTMX, tanpa login) | ✅ **Selesai** — verifikasi 3/3 skenario live: sehat, AM mati (graceful), alert firing → panel kanan; 39 test, coverage 86% |
-| 7 | Kubernetes (kind): probe, ConfigMap/Secret | ⬜ |
+| 7 | Kubernetes (kind): probe, ConfigMap/Secret | ✅ **Selesai** — `apply.sh` bootstrap terurut; 2/2 pod + ingress hijau; **90/90 request 200 saat 1 pod dihapus paksa** (self-healing) |
 | 8 | CD: rolling update + auto rollback | ⬜ |
 | 9 | Hardening: backup/restore drill, k6, OWASP | ⬜ |
 

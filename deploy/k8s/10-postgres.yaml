@@ -1,0 +1,85 @@
+# PostgreSQL — Deployment + PVC + Service.
+# Catatan keputusan: pakai Deployment (bukan StatefulSet) + strategy: Recreate —
+# cluster belajar ini hanya 1 replica writer; rolling update akan berebut PVC RWO.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: corebank
+  labels:
+    app: postgres
+    app.kubernetes.io/part-of: corebank
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            # Dev credentials — sama dengan docker compose. Bukan untuk produksi.
+            - name: POSTGRES_USER
+              value: corebank
+            - name: POSTGRES_PASSWORD
+              value: corebank
+            - name: POSTGRES_DB
+              value: corebank
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "corebank", "-d", "corebank"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "corebank"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: corebank
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: corebank
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

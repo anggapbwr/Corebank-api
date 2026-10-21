@@ -1,0 +1,67 @@
+# API — 2 replica (uji self-healing: mati 1 pod → traffic pindah).
+# Liveness  = /healthz (proses hidup? restart kalau macet)
+# Readiness = /readyz  (siap terima trafik? cek PostgreSQL+Redis → pod yang
+#             dependency-nya mati otomatis dikeluarkan dari endpoint Service)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: corebank
+  namespace: corebank
+  labels:
+    app: corebank
+    app.kubernetes.io/part-of: corebank
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: corebank
+  template:
+    metadata:
+      labels:
+        app: corebank
+    spec:
+      containers:
+        - name: app
+          image: corebank-api:kind
+          imagePullPolicy: IfNotPresent # image di-load lokal ke kind (kind load), bukan dari registry
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: corebank-config
+            - secretRef:
+                name: corebank-secret
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: corebank
+  namespace: corebank
+  labels:
+    app: corebank
+spec:
+  selector:
+    app: corebank
+  ports:
+    - port: 80
+      targetPort: 8000

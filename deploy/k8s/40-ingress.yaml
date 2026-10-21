@@ -1,0 +1,22 @@
+# Ingress — semua request host ke Service corebank:80.
+# Tanpa field `host` → cocok untuk akses langsung http://localhost:8080/
+# (lawan host-based routing yang butuh edit /etc/hosts).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: corebank
+  namespace: corebank
+  labels:
+    app.kubernetes.io/part-of: corebank
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: corebank
+                port:
+                  number: 80

@@ -1,0 +1,16 @@
+# Konfigurasi non-secret aplikasi. Rahasia (DATABASE_URL, JWT_SECRET) → Secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: corebank-config
+  namespace: corebank
+  labels:
+    app.kubernetes.io/part-of: corebank
+data:
+  APP_ENV: "dev"
+  LOG_LEVEL: "INFO"
+  REDIS_URL: "redis://redis:6379/0"
+  # Catatan: stack monitoring (Prometheus/Alertmanager) tetap di docker compose.
+  # Cluster ini sengaja tanpa monitoring → panel alert dashboard akan menampilkan
+  # "Alertmanager tidak terjangkau" (state graceful, bukan error).
+  ALERTMANAGER_URL: "http://localhost:9093"
