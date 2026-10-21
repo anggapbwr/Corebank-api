@@ -17,6 +17,12 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     amqp_url: str = "amqp://guest:guest@localhost:5672/"
 
+    # Auth (JWT) — di produksi WAJIB set JWT_SECRET via env, default hanya untuk dev
+    jwt_secret: str = "dev-only-secret-ganti-di-produksi"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+
     @property
     def psycopg_dsn(self) -> str:
         return self.database_url.replace("postgresql+psycopg://", "postgresql://")

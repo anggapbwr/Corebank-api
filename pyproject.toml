@@ -15,6 +15,10 @@ dependencies = [
     "pydantic-settings>=2.6",
     "psycopg[binary]>=3.2",
     "redis>=5.2",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14",
+    "pyjwt>=2.10",
+    "argon2-cffi>=23.1",
 ]
 
 [project.optional-dependencies]
@@ -34,6 +38,14 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI idiom: Depends(...) sebagai default argumen aman (tidak dievaluasi saat def)
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query"]
+
+[tool.ruff.lint.per-file-ignores]
+# Route FastAPI: Depends(require_roles(...)) di signature adalah idiom resmi framework
+"app/api/routes/*.py" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

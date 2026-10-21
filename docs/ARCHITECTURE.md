@@ -2,9 +2,11 @@
 
 Dokumen desain: arsitektur menyeluruh, keputusan teknologi (ADR), dan alur data.
 
-> **Status implementasi:** Fase 1 (foundation) sudah jalan — FastAPI + `/healthz` + `/readyz`
-> + settings pydantic + Docker Compose stack. Komponen lain (services, MQ consumer,
-> K8s) sesuai roadmap; diagram di bawah adalah *target arsitektur*.
+> **Status implementasi:** Fase 1–2 sudah jalan — FastAPI + health probes + Auth JWT
+> (access/refresh) + RBAC 7 role + model SQLAlchemy + Alembic (schema + trigger
+> append-only) + alur rekening (buka → approve → freeze) + ledger service.
+> Transfer/approval workflow (Fase 3), MQ consumer, K8s — sesuai roadmap;
+> diagram di bawah adalah *target arsitektur*.
 
 ---
 

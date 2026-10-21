@@ -21,6 +21,8 @@ RUN pip install --no-cache-dir --upgrade pip \
 FROM base AS runtime
 COPY --from=builder /install /usr/local
 COPY app ./app
+COPY alembic.ini ./
+COPY migrations ./migrations
 USER app
 EXPOSE 8000
 # Liveness endpoint dipakai container healthcheck compose & K8s liveness probe nanti
@@ -33,6 +35,8 @@ FROM base AS test
 COPY pyproject.toml README.md ./
 COPY app ./app
 COPY tests ./tests
+COPY alembic.ini ./
+COPY migrations ./migrations
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir ".[dev]"
 CMD ["pytest"]

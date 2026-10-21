@@ -14,6 +14,9 @@ services:
       DATABASE_URL: postgresql+psycopg://corebank:corebank@postgres:5432/corebank
       REDIS_URL: redis://redis:6379/0
       AMQP_URL: amqp://guest:guest@rabbitmq:5672/
+    # Migration dulu, baru serve — pola "migrate on deploy" (peringatan: di K8s
+    # dengan multi-replica, jalankan migration sebagai Job terpisah, bukan per-pod)
+    command: sh -c "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports:
       - "8000:8000"
     depends_on:
