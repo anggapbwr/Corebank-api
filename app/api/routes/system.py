@@ -77,8 +77,6 @@ async def system_alerts() -> dict:
     try:
         raw = await _query_alertmanager(settings)
     except Exception as exc:  # noqa: BLE001 — dashboard tidak boleh gagal karena alert
-        logger.warning(
-            "alertmanager tidak terjangkau", extra={"error": type(exc).__name__}
-        )
+        logger.warning("alertmanager tidak terjangkau", extra={"error": type(exc).__name__})
         return {"alerts": [], "alertmanager": "down", "error": type(exc).__name__}
     return {"alerts": _normalize(raw), "alertmanager": "up"}

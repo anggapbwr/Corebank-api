@@ -15,9 +15,9 @@ def test_dashboard_render_tanpa_login() -> None:
     """GET / langsung dashboard (200, tanpa redirect login) + ada panel alert kanan."""
     resp = client.get("/")
     assert resp.status_code == 200
-    assert "id=\"alerts-panel\"" in resp.text
-    assert "hx-get=\"/fragments/alerts\"" in resp.text
-    assert "hx-get=\"/fragments/health\"" in resp.text
+    assert 'id="alerts-panel"' in resp.text
+    assert 'hx-get="/fragments/alerts"' in resp.text
+    assert 'hx-get="/fragments/health"' in resp.text
     assert "PostgreSQL" in resp.text  # kartu System Health ikut ter-render
 
 
@@ -76,6 +76,7 @@ def test_alerts_normalisasi_dan_urutan_severity(monkeypatch: pytest.MonkeyPatch)
 
 def test_alerts_alertmanager_down_graceful(monkeypatch: pytest.MonkeyPatch) -> None:
     """Alertmanager mati → dashboard tetap 200, panel kasih tahu kondisinya."""
+
     async def fake_query(_settings):  # noqa: ANN001, ANN202
         raise ConnectionError("koneksi ditolak")
 
@@ -90,6 +91,7 @@ def test_alerts_alertmanager_down_graceful(monkeypatch: pytest.MonkeyPatch) -> N
 
 def test_alerts_panel_isi_alert_firing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Panel kanan menampilkan alert yang sedang firing (bukan hanya angka)."""
+
     async def fake_query(_settings):  # noqa: ANN001, ANN202
         return [
             {
@@ -104,7 +106,7 @@ def test_alerts_panel_isi_alert_firing(monkeypatch: pytest.MonkeyPatch) -> None:
     fragment = client.get("/fragments/alerts").text
     assert "DatabaseDown" in fragment
     assert "PostgreSQL tidak terjangkau" in fragment
-    assert "class=\"count\"" in fragment
+    assert 'class="count"' in fragment
 
 
 def test_health_fragment_kartu_up() -> None:
