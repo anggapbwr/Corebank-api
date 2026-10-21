@@ -40,7 +40,9 @@
   def test_transfer_gagal_saldo_cukup_rollback():
       """BR-02: transfer atomik — gagal = tanpa perubahan"""
   ```
-- Coverage gate 80% di CI
+- Coverage gate 80% di CI. **Pitfall:** core default coverage (pytrace) memutus
+  tracing di greenlet SQLAlchemy async → angka coverage palsu turun ke ~73%.
+  Wajib `COVERAGE_CORE=sysmon` (workflow CI sudah set; lokal py3.14 otomatis).
 
 ## API Design
 

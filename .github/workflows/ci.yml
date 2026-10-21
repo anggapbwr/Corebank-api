@@ -58,6 +58,9 @@ jobs:
     env:
       DATABASE_URL: postgresql+psycopg://corebank:corebank@localhost:5432/corebank
       REDIS_URL: redis://localhost:6379/0
+      # Core tracing coverage: default (pytrace) memutus tracing di greenlet
+      # SQLAlchemy async → coverage palsu ~73%. Sysmon mencatat benar (~88%).
+      COVERAGE_CORE: sysmon
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

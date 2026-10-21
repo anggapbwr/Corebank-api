@@ -51,3 +51,4 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query"]
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-q"
+
