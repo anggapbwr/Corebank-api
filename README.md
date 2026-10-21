@@ -1,5 +1,7 @@
 # CoreBank API
 
+[![CI](https://github.com/anggapbwr/Corebank-api/actions/workflows/ci.yml/badge.svg)](https://github.com/anggapbwr/Corebank-api/actions/workflows/ci.yml)
+
 Mini core banking API — project belajar **DevOps + API** dengan domain perbankan yang real:
 double-entry ledger, idempotency, RBAC, approval workflow, CI/CD, Kubernetes, observability.
 
@@ -16,7 +18,7 @@ double-entry ledger, idempotency, RBAC, approval workflow, CI/CD, Kubernetes, ob
 | Auth JWT + RBAC | ✅ | access+refresh token, argon2, 7 role; register khusus manager |
 | Accounts + double-entry ledger | ✅ | Alembic migration; trigger DB append-only (BR-04); balance check (BR-01/05) |
 | Transfer atomic + idempotency | ✅ | Redis SETNX + UNIQUE column (BR-03); approval matrix dari config; work queue + eskalasi; audit trail |
-| CI/CD (GitHub Actions → GHCR) | 🚧 Fase 4 | test → build → Trivy scan → push |
+| CI/CD (GitHub Actions → GHCR) | ✅ | ruff → pytest (coverage gate 80%) → docker build → Trivy scan → push GHCR |
 | Observability (Prometheus/Grafana/Loki) | 🚧 Fase 5 | alert ke Telegram |
 | Kubernetes (kind) + zero-downtime | 🚧 Fase 6–7 | readiness/liveness probe, rolling update + auto rollback |
 | Hardening (backup/restore, load test) | 🚧 Fase 8 | RPO/RTO restore drill, k6, OWASP review |
@@ -130,7 +132,7 @@ corebank-api/
 | 1 | Foundation & Docker Compose | ✅ **Selesai** — healthz/readyz 200, pytest container 3 passed, data persist setelah restart |
 | 2 | Auth JWT + RBAC + Accounts + Ledger | ✅ **Selesai** — 17 test passed (lokal & container), smoke test 9/9, BR-01/04/05 terbukti |
 | 3 | Transfer + Idempotency + Approval workflow | ✅ **Selesai** — 26 test passed (lokal & container), smoke 9/9; BR-01..10 terbukti termasuk eskalasi 400jt → manager |
-| 4 | Testing & CI (GitHub Actions → GHCR) | ⬜ |
+| 4 | Testing & CI (GitHub Actions → GHCR) | ✅ **Selesai** — lint + pytest coverage gate 80% (lokal 87%) + Trivy scan + push `sha-<7digit>` ke GHCR |
 | 5 | Observability (Prometheus/Grafana/Loki/Alert) | ⬜ |
 | 6 | Kubernetes (kind): probe, ConfigMap/Secret | ⬜ |
 | 7 | CD: rolling update + auto rollback | ⬜ |
