@@ -1,0 +1,24 @@
+# Alertmanager — kirim ke Telegram.
+# Placeholder __TG_BOT_TOKEN__ / __TG_CHAT_ID__ diisi oleh entrypoint container
+# dari env TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (lihat docker-compose.yml).
+# Tanpa token, notifikasi Telegram gagal kirim tapi alert tetap terlihat
+# di UI Alertmanager (http://localhost:9093) — tidak menghalangi start.
+global:
+  resolve_timeout: 1m
+
+route:
+  receiver: telegram
+  group_by: ["alertname", "severity"]
+  group_wait: 10s
+  group_interval: 30s
+  repeat_interval: 4h
+
+receivers:
+  - name: telegram
+    telegram_configs:
+      - bot_token: "__TG_BOT_TOKEN__"
+        chat_id: __TG_CHAT_ID__
+        send_resolved: true
+        message: |
+          {{ .Status | toUpper }}: {{ .CommonAnnotations.summary }}
+          {{ .CommonAnnotations.description }}

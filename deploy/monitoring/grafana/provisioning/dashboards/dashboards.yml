@@ -1,0 +1,11 @@
+# Grafana — auto-load dashboard dari folder /var/lib/grafana/dashboards
+apiVersion: 1
+
+providers:
+  - name: corebank
+    folder: CoreBank
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards

@@ -11,6 +11,7 @@ import asyncio
 from fastapi import APIRouter, Response
 
 from app.core.config import get_settings
+from app.core.observability import metrics_response
 
 router = APIRouter(tags=["health"])
 
@@ -46,6 +47,16 @@ async def check_redis(url: str) -> str:
 @router.get("/healthz")
 async def healthz() -> dict:
     return {"status": "ok"}
+
+
+@router.get("/metrics")
+async def metrics() -> Response:
+    """Endpoint scrape Prometheus (format text mentah prometheus_client).
+
+    Di produksi biasanya dipisah ke port/jaringan internal — di sini cukup
+    terpisah dari jalur bisnis & tanpa data sensitif.
+    """
+    return metrics_response()
 
 
 @router.get("/readyz")

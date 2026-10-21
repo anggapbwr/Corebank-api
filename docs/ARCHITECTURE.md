@@ -2,11 +2,12 @@
 
 Dokumen desain: arsitektur menyeluruh, keputusan teknologi (ADR), dan alur data.
 
-> **Status implementasi:** Fase 1–3 sudah jalan — health probes, Auth JWT (access/refresh),
-> RBAC 7 role, model SQLAlchemy + Alembic (schema + trigger append-only ledger & audit),
-> alur rekening (buka → approve → freeze), **transfer atomic + idempotency dua lapis
-> (Redis SETNX + UNIQUE column) + approval workflow dengan eskalasi + audit trail**.
-> MQ consumer, K8s — sesuai roadmap; diagram di bawah adalah *target arsitektur*.
+> **Status implementasi:** Fase 1–5 sudah jalan — health probes, Auth JWT, RBAC 7 role,
+> Alembic (ledger & audit append-only via trigger), alur rekening, **transfer atomic +
+> idempotency dua lapis + approval workflow + eskalasi + audit trail**, **CI/CD hijau
+> (GHCR image per SHA)**, **observability penuh: metrics Prometheus, log JSON +
+> correlation ID → Loki, alert DB mati → Alertmanager (→ Telegram via .env)**.
+> K8s (Fase 6–7) sesuai roadmap; diagram di bawah adalah *target arsitektur*.
 
 ---
 

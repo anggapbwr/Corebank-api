@@ -1,18 +1,38 @@
 """CoreBank API — FastAPI entrypoint."""
 
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI
 
 from app.api.routes import accounts, approvals, audit, auth, customers, health, transfers
 from app.core.config import get_settings
+from app.core.observability import ObservabilityMiddleware, monitor_loop, setup_logging
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+    """Startup: logging JSON + background monitor (gauge DB/Redis/antrean)."""
+    settings = get_settings()
+    setup_logging(settings.log_level)
+    monitor_task = asyncio.create_task(monitor_loop())
+    application.state.monitor_task = monitor_task
+    yield
+    monitor_task.cancel()
+    with suppress(asyncio.CancelledError):
+        await monitor_task
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
     application = FastAPI(
         title=settings.app_name,
-        version="0.2.0",
+        version="0.3.0",
         description="Mini core banking API — double-entry ledger, RBAC, approval workflow.",
+        lifespan=lifespan,
     )
+    application.add_middleware(ObservabilityMiddleware)
     application.include_router(health.router)
     application.include_router(auth.router)
     application.include_router(customers.router)

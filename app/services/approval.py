@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.observability import APPROVAL_DECISIONS
 from app.models.account import Account, AccountStatus
 from app.models.approval import (
     ApprovalObjectType,
@@ -84,6 +85,7 @@ async def decide(
         req.reason = reason
         tx.status = TransactionStatus.REJECTED
         tx.rejected_reason = reason
+        APPROVAL_DECISIONS.labels("rejected", approver.role.value).inc()
         await audit.record(
             db,
             actor_id=approver.id,
@@ -107,6 +109,7 @@ async def decide(
         req.status = ApprovalStatus.ESCALATED
         req.current_role = UserRole.MANAGER
         req.escalation_level += 1
+        APPROVAL_DECISIONS.labels("escalated", approver.role.value).inc()
         await audit.record(
             db,
             actor_id=approver.id,
@@ -159,6 +162,7 @@ async def decide(
     req.status = ApprovalStatus.APPROVED
     req.decided_by = approver.id
     req.decided_at = now
+    APPROVAL_DECISIONS.labels("approved", approver.role.value).inc()
     await audit.record(
         db,
         actor_id=approver.id,

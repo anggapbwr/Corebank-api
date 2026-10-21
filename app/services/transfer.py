@@ -11,6 +11,7 @@ Aturan yang dijaga:
 - BR-07 approval matrix dari config (≤50jt langsung; ≤250jt supervisor; >250jt manager)
 """
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -19,6 +20,7 @@ import redis.asyncio as aioredis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.observability import TRANSFER_EXECUTED, TRANSFER_FAILED
 from app.models.account import Account, AccountStatus
 from app.models.approval import ApprovalObjectType, ApprovalRequest, ApprovalStatus
 from app.models.ledger import LedgerDirection
@@ -138,6 +140,11 @@ async def initiate_transfer(
                 "amount": str(amount),
                 "duplicate": False,
             }
+            TRANSFER_EXECUTED.labels("direct").inc()
+            logging.getLogger("corebank.transfer").info(
+                "transfer dieksekusi",
+                extra={"transaction_id": str(tx.id), "amount": str(amount)},
+            )
             await audit.record(
                 db,
                 actor_id=user.id,
@@ -197,7 +204,9 @@ async def initiate_transfer(
     except InsufficientBalanceError as exc:
         # BR-01/02: tidak ada yang berubah — lepas key supaya retry tetap mungkin
         await _release(db, redis, idempotency_key)
+        TRANSFER_FAILED.labels("insufficient_balance").inc()
         raise TransferError(422, str(exc)) from exc
-    except TransferError:
+    except TransferError as exc:
         await _release(db, redis, idempotency_key)
+        TRANSFER_FAILED.labels(str(exc.status_code)).inc()
         raise

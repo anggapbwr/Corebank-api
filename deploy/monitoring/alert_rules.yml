@@ -1,0 +1,50 @@
+# Alert rules — AC Fase 5: "matikan postgres → alert masuk Telegram"
+groups:
+  - name: corebank
+    rules:
+      - alert: DatabaseDown
+        expr: corebank_db_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL tidak terjangkau"
+          description: "Gauge corebank_db_up = 0 selama 30 detik — cek container postgres."
+
+      - alert: RedisDown
+        expr: corebank_redis_up == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis tidak terjangkau"
+          description: "Idempotency lapis-1 & rate limit terganggu (lapis DB masih jalan)."
+
+      - alert: ApiDown
+        expr: up{job="corebank-api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "CoreBank API tidak bisa di-scrape"
+          description: "Container app mati atau /metrics tidak merespons."
+
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error rate > 5% selama 5 menit"
+          description: "Lihat log JSON di Loki dengan filter correlation_id."
+
+      - alert: ApprovalQueueBacklog
+        expr: corebank_approval_queue_size > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Antrean approval menumpuk (>20 selama 10 menit)"
+          description: "Supervisor/manager perlu memproses work queue."

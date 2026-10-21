@@ -19,6 +19,7 @@ dependencies = [
     "alembic>=1.14",
     "pyjwt>=2.10",
     "argon2-cffi>=23.1",
+    "prometheus-client>=0.21",
 ]
 
 [project.optional-dependencies]

@@ -19,7 +19,7 @@ double-entry ledger, idempotency, RBAC, approval workflow, CI/CD, Kubernetes, ob
 | Accounts + double-entry ledger | ✅ | Alembic migration; trigger DB append-only (BR-04); balance check (BR-01/05) |
 | Transfer atomic + idempotency | ✅ | Redis SETNX + UNIQUE column (BR-03); approval matrix dari config; work queue + eskalasi; audit trail |
 | CI/CD (GitHub Actions → GHCR) | ✅ | ruff → pytest (coverage gate 80%) → docker build → Trivy scan → push GHCR |
-| Observability (Prometheus/Grafana/Loki) | 🚧 Fase 5 | alert ke Telegram |
+| Observability (Prometheus/Grafana/Loki) | ✅ | metrics HTTP+bisnis, log JSON+correlation ID, alert DB mati → Alertmanager/Telegram |
 | Kubernetes (kind) + zero-downtime | 🚧 Fase 6–7 | readiness/liveness probe, rolling update + auto rollback |
 | Hardening (backup/restore, load test) | 🚧 Fase 8 | RPO/RTO restore drill, k6, OWASP review |
 
@@ -85,6 +85,9 @@ docker compose -f deploy/docker/docker-compose.yml down
 | `http://localhost:8000/healthz` | Liveness — proses hidup? (tanpa cek dependency) |
 | `http://localhost:8000/readyz` | Readiness — Postgres+Redis siap terima trafik? |
 | `http://localhost:15672` | RabbitMQ management UI (guest/guest) |
+| `http://localhost:9090` | Prometheus — query metrics & alert |
+| `http://localhost:3000` | Grafana — dashboard (admin/admin), folder *CoreBank* |
+| `http://localhost:9093` | Alertmanager — alert aktif (Telegram opsional, isi `.env`) |
 
 ## 🧪 Development
 
@@ -133,7 +136,7 @@ corebank-api/
 | 2 | Auth JWT + RBAC + Accounts + Ledger | ✅ **Selesai** — 17 test passed (lokal & container), smoke test 9/9, BR-01/04/05 terbukti |
 | 3 | Transfer + Idempotency + Approval workflow | ✅ **Selesai** — 26 test passed (lokal & container), smoke 9/9; BR-01..10 terbukti termasuk eskalasi 400jt → manager |
 | 4 | Testing & CI (GitHub Actions → GHCR) | ✅ **Selesai** — lint + pytest coverage gate 80% (lokal 87%) + Trivy scan + push `sha-<7digit>` ke GHCR |
-| 5 | Observability (Prometheus/Grafana/Loki/Alert) | ⬜ |
+| 5 | Observability (Prometheus/Grafana/Loki/Alert) | ✅ **Selesai** — verifikasi 8/8: rate/latency terukur, dashboard terprovision, log → Loki, **mati Postgres → alert firing → resolve** |
 | 6 | Kubernetes (kind): probe, ConfigMap/Secret | ⬜ |
 | 7 | CD: rolling update + auto rollback | ⬜ |
 | 8 | Hardening: backup/restore drill, k6, OWASP | ⬜ |
