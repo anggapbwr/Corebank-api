@@ -3,17 +3,21 @@
 {% block content %}
   <div class="login-wrap">
     <div class="card">
-      <h1 style="font-size:17px;margin:0 0 4px">Login Workbench</h1>
+      <h1>Login Workbench</h1>
       <p class="note">Sesi memakai cookie HttpOnly (15 menit).</p>
-      {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
-      <form method="post" action="/login">
+      {% if error %}
+        <div class="flash err" role="alert">{{ error }}</div>
+      {% endif %}
+      <form method="post" action="/login" novalidate>
         <label for="username">Username</label>
-        <input id="username" name="username" autocomplete="username" required>
+        <input id="username" name="username" type="text"
+               autocomplete="username" required autofocus>
         <label for="password">Password</label>
         <input id="password" name="password" type="password"
                autocomplete="current-password" required>
         <button class="btn" type="submit">Masuk</button>
       </form>
+      <p class="note" style="margin-bottom: 0">Akun demo: supervisor / rahasia-dev-123</p>
     </div>
     <p class="note" style="text-align:center">
       Monitoring tetap bisa dibuka tanpa login di <a href="/">halaman utama</a>.

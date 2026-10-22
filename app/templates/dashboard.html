@@ -1,11 +1,17 @@
 {% extends "base.html" %}
+{% block title %}CoreBank — Monitoring{% endblock %}
 {% block content %}
-  <h1>System Health</h1>
-  <div id="health-panel"
+  <div class="page-head">
+    <h1>System Health</h1>
+    <span class="note">⟳ otomatis tiap 15 dtk</span>
+  </div>
+  <div id="health-panel" aria-live="polite" aria-label="Kesehatan sistem"
        hx-get="/fragments/health" hx-trigger="every 15s" hx-swap="innerHTML">
     {% include "partials/_health.html" %}
   </div>
-  <p class="note">
+  <p class="note" style="margin-top: var(--s4)">
     Kartu diperbarui otomatis tiap 15 detik (gauge monitor), panel alert tiap 20 detik.
+    Untuk pekerjaan harian (antrean approve, transaksi, audit) buka
+    <a href="/mywork">My Work</a>.
   </p>
 {% endblock %}

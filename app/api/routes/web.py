@@ -158,7 +158,7 @@ async def logout() -> Response:
 async def _mywork_context(db: AsyncSession, user: User, flash: dict | None = None) -> dict:
     """Data panel My Work sesuai role — satu sumber kebenaran untuk render
     awal, fragment, dan respons aksi (approve/reject)."""
-    ctx: dict = {"user": user, "flash": flash}
+    ctx: dict = {"user": user, "flash": flash, "active_nav": "mywork"}
 
     if user.role in (UserRole.SUPERVISOR, UserRole.MANAGER):
         queue = await list_queue(db, user.role)
@@ -265,7 +265,12 @@ async def dashboard(request: Request) -> Response:
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {"health": await system_health(), "alerts": await system_alerts(), "user": None},
+        {
+            "health": await system_health(),
+            "alerts": await system_alerts(),
+            "user": None,
+            "active_nav": "dashboard",
+        },
     )
 
 
