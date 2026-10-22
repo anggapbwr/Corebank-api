@@ -3,6 +3,11 @@
 Alur (ARCHITECTURE.md §2):
   idempotency → validasi rekening → keputusan: eksekusi atomik ATAU antre approval
 
+Struktur: initiate_transfer hanya mengorkestrasi; tiap fase jadi helper kecil
+(_validate_accounts / _execute_direct / _enqueue_approval) agar mudah dibaca.
+Commit tetap di initiate_transfer — urutan audit → idempotency → commit persis
+seperti sebelum refactor.
+
 Aturan yang dijaga:
 - BR-01 saldo cukup (di post_journal)
 - BR-02 atomik: gagal = rollback total, tidak ada jejak ledger
@@ -58,6 +63,132 @@ async def _release(db: AsyncSession, redis: aioredis.Redis, key: str) -> None:
         pass
 
 
+async def _validate_accounts(
+    db: AsyncSession, source_account_id: UUID, dest_account_id: UUID
+) -> tuple[Account, Account]:
+    """Validasi rekening sumber & tujuan (BOLA + BR-06)."""
+    source = await db.get(Account, source_account_id)
+    dest = await db.get(Account, dest_account_id)
+    if source is None or dest is None:
+        raise TransferError(404, "Rekening sumber/tujuan tidak ditemukan")
+    if source.id == dest.id:
+        raise TransferError(422, "Rekening sumber dan tujuan tidak boleh sama")
+    if source.status != AccountStatus.ACTIVE or dest.status != AccountStatus.ACTIVE:
+        raise TransferError(409, "Rekening tidak aktif (FROZEN/PENDING) — BR-06")
+    return source, dest
+
+
+async def _execute_direct(
+    db: AsyncSession,
+    *,
+    source: Account,
+    dest: Account,
+    amount: Decimal,
+    user: User,
+    idempotency_key: str,
+    fresh,  # record idempotency yang masih proses (None = Redis mati)
+) -> dict:
+    """EKSEKUSI ATOMIK (BR-02) — caller commit setelah audit + idempotency."""
+    tx = Transaction(
+        type=TransactionType.TRANSFER,
+        source_account_id=source.id,
+        dest_account_id=dest.id,
+        amount=amount,
+        status=TransactionStatus.EXECUTED,
+        created_by=user.id,
+        # lapis 2 BR-03: UNIQUE di kolom ini menangkap race kalau Redis mati
+        idempotency_key=idempotency_key,
+        executed_at=datetime.now(UTC),
+    )
+    db.add(tx)
+    await db.flush()
+    # 2 baris ledger seimbang dalam SATU transaksi DB — post_journal
+    # melempar InsufficientBalanceError → seluruh tx di-rollback (BR-01/02)
+    await post_journal(
+        db,
+        transaction_id=tx.id,
+        movements=[
+            (source, LedgerDirection.DEBIT, amount),
+            (dest, LedgerDirection.CREDIT, amount),
+        ],
+    )
+    response = {
+        "transaction_id": str(tx.id),
+        "status": TransactionStatus.EXECUTED.value,
+        "amount": str(amount),
+        "duplicate": False,
+    }
+    TRANSFER_EXECUTED.labels("direct").inc()
+    logging.getLogger("corebank.transfer").info(
+        "transfer dieksekusi",
+        extra={"transaction_id": str(tx.id), "amount": str(amount)},
+    )
+    await audit.record(
+        db,
+        actor_id=user.id,
+        action="TRANSFER_EXECUTED",
+        object_type="transfer",
+        object_id=tx.id,
+        payload={"source": str(source.id), "dest": str(dest.id), "amount": str(amount)},
+    )
+    if fresh is not None:
+        await idempotency.complete(db, fresh, response)
+    return response
+
+
+async def _enqueue_approval(
+    db: AsyncSession,
+    *,
+    source: Account,
+    dest: Account,
+    amount: Decimal,
+    user: User,
+    idempotency_key: str,
+    fresh,
+) -> dict:
+    """MASUK ANTREAN APPROVAL (BR-07) — caller commit setelah audit + idempotency."""
+    tx = Transaction(
+        type=TransactionType.TRANSFER,
+        source_account_id=source.id,
+        dest_account_id=dest.id,
+        amount=amount,
+        status=TransactionStatus.PENDING_APPROVAL,
+        created_by=user.id,
+        idempotency_key=idempotency_key,
+    )
+    db.add(tx)
+    await db.flush()
+    approval = ApprovalRequest(
+        object_type=ApprovalObjectType.TRANSFER,
+        object_id=tx.id,
+        current_role=UserRole.SUPERVISOR,
+        status=ApprovalStatus.PENDING,
+        escalation_level=1,
+        requested_by=user.id,
+        matrix_snapshot=matrix_snapshot(),
+    )
+    db.add(approval)
+    await db.flush()
+    response = {
+        "transaction_id": str(tx.id),
+        "approval_id": str(approval.id),
+        "status": TransactionStatus.PENDING_APPROVAL.value,
+        "amount": str(amount),
+        "duplicate": False,
+    }
+    await audit.record(
+        db,
+        actor_id=user.id,
+        action="TRANSFER_PENDING_APPROVAL",
+        object_type="transfer",
+        object_id=tx.id,
+        payload={"approval_id": str(approval.id), "amount": str(amount)},
+    )
+    if fresh is not None:
+        await idempotency.complete(db, fresh, response)
+    return response
+
+
 async def initiate_transfer(
     db: AsyncSession,
     redis: aioredis.Redis,
@@ -96,108 +227,30 @@ async def initiate_transfer(
         return {**existing.response_snapshot, "duplicate": True}, 200
 
     try:
-        # --- validasi rekening (BOLA & BR-06) ---
-        source = await db.get(Account, source_account_id)
-        dest = await db.get(Account, dest_account_id)
-        if source is None or dest is None:
-            raise TransferError(404, "Rekening sumber/tujuan tidak ditemukan")
-        if source.id == dest.id:
-            raise TransferError(422, "Rekening sumber dan tujuan tidak boleh sama")
-        if source.status != AccountStatus.ACTIVE or dest.status != AccountStatus.ACTIVE:
-            raise TransferError(409, "Rekening tidak aktif (FROZEN/PENDING) — BR-06")
+        source, dest = await _validate_accounts(db, source_account_id, dest_account_id)
 
-        settings = get_settings()
-        now = datetime.now(UTC)
-
-        if amount <= settings.approval_direct_execute_max:
-            # ============ EKSEKUSI ATOMIK (BR-02) ============
-            tx = Transaction(
-                type=TransactionType.TRANSFER,
-                source_account_id=source.id,
-                dest_account_id=dest.id,
+        if amount <= get_settings().approval_direct_execute_max:
+            response = await _execute_direct(
+                db,
+                source=source,
+                dest=dest,
                 amount=amount,
-                status=TransactionStatus.EXECUTED,
-                created_by=user.id,
-                # lapis 2 BR-03: UNIQUE di kolom ini menangkap race kalau Redis mati
+                user=user,
                 idempotency_key=idempotency_key,
-                executed_at=now,
+                fresh=fresh,
             )
-            db.add(tx)
-            await db.flush()
-            # 2 baris ledger seimbang dalam SATU transaksi DB — post_journal
-            # melempar InsufficientBalanceError → seluruh tx di-rollback (BR-01/02)
-            await post_journal(
-                db,
-                transaction_id=tx.id,
-                movements=[
-                    (source, LedgerDirection.DEBIT, amount),
-                    (dest, LedgerDirection.CREDIT, amount),
-                ],
-            )
-            response = {
-                "transaction_id": str(tx.id),
-                "status": TransactionStatus.EXECUTED.value,
-                "amount": str(amount),
-                "duplicate": False,
-            }
-            TRANSFER_EXECUTED.labels("direct").inc()
-            logging.getLogger("corebank.transfer").info(
-                "transfer dieksekusi",
-                extra={"transaction_id": str(tx.id), "amount": str(amount)},
-            )
-            await audit.record(
-                db,
-                actor_id=user.id,
-                action="TRANSFER_EXECUTED",
-                object_type="transfer",
-                object_id=tx.id,
-                payload={"source": str(source.id), "dest": str(dest.id), "amount": str(amount)},
-            )
-            if fresh is not None:
-                await idempotency.complete(db, fresh, response)
             await db.commit()
             return response, 201
 
-        # ============ MASUK ANTREAN APPROVAL (BR-07) ============
-        tx = Transaction(
-            type=TransactionType.TRANSFER,
-            source_account_id=source.id,
-            dest_account_id=dest.id,
-            amount=amount,
-            status=TransactionStatus.PENDING_APPROVAL,
-            created_by=user.id,
-            idempotency_key=idempotency_key,
-        )
-        db.add(tx)
-        await db.flush()
-        approval = ApprovalRequest(
-            object_type=ApprovalObjectType.TRANSFER,
-            object_id=tx.id,
-            current_role=UserRole.SUPERVISOR,
-            status=ApprovalStatus.PENDING,
-            escalation_level=1,
-            requested_by=user.id,
-            matrix_snapshot=matrix_snapshot(),
-        )
-        db.add(approval)
-        await db.flush()
-        response = {
-            "transaction_id": str(tx.id),
-            "approval_id": str(approval.id),
-            "status": TransactionStatus.PENDING_APPROVAL.value,
-            "amount": str(amount),
-            "duplicate": False,
-        }
-        await audit.record(
+        response = await _enqueue_approval(
             db,
-            actor_id=user.id,
-            action="TRANSFER_PENDING_APPROVAL",
-            object_type="transfer",
-            object_id=tx.id,
-            payload={"approval_id": str(approval.id), "amount": str(amount)},
+            source=source,
+            dest=dest,
+            amount=amount,
+            user=user,
+            idempotency_key=idempotency_key,
+            fresh=fresh,
         )
-        if fresh is not None:
-            await idempotency.complete(db, fresh, response)
         await db.commit()
         return response, 202
 

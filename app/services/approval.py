@@ -2,6 +2,9 @@
 
 Keputusan yang diambil selalu menyisakan jejak: approval_requests (siapa,
 kapan, alasan, matrix snapshot) + audit_logs (BR-08, BR-10).
+
+Struktur: decide() hanya mengorkestrasi — tiap cabang putusan jadi helper
+(_reject / _escalate / _approve_execute) supaya tiap jalur mudah ditelusuri.
 """
 
 from datetime import UTC, datetime
@@ -61,78 +64,76 @@ async def _load_open_request(db: AsyncSession, request_id: UUID, approver: User)
     return req
 
 
-async def decide(
-    db: AsyncSession,
-    *,
-    request_id: UUID,
-    approver: User,
-    approve: bool,
-    reason: str | None,
+async def _reject(
+    db: AsyncSession, req: ApprovalRequest, tx: Transaction, approver: User, reason: str
 ) -> tuple[dict, int]:
-    req = await _load_open_request(db, request_id, approver)
-    tx = await db.get(Transaction, req.object_id)
-    if tx is None:
-        raise ApprovalError(409, "Objek transaksi tidak ditemukan")
+    """REJECT — BR-08: alasan wajib, ditolak lebih awal sebelum ada perubahan."""
+    if not reason or not reason.strip():
+        raise ApprovalError(422, "Reject wajib menyertakan alasan (BR-08)")
+    now = datetime.now(UTC)
+    req.status = ApprovalStatus.REJECTED
+    req.decided_by = approver.id
+    req.decided_at = now
+    req.reason = reason
+    tx.status = TransactionStatus.REJECTED
+    tx.rejected_reason = reason
+    APPROVAL_DECISIONS.labels("rejected", approver.role.value).inc()
+    await audit.record(
+        db,
+        actor_id=approver.id,
+        action="APPROVAL_REJECTED",
+        object_type="approval",
+        object_id=req.id,
+        payload={"transaction_id": str(tx.id), "amount": str(tx.amount), "reason": reason},
+    )
+    await db.commit()
+    return {
+        "approval_id": str(req.id),
+        "status": req.status.value,
+        "transaction_id": str(tx.id),
+        "transaction_status": tx.status.value,
+    }, 200
 
-    if not approve:
-        # --- REJECT (BR-08: alasan wajib) ---
-        if not reason or not reason.strip():
-            raise ApprovalError(422, "Reject wajib menyertakan alasan (BR-08)")
-        now = datetime.now(UTC)
-        req.status = ApprovalStatus.REJECTED
-        req.decided_by = approver.id
-        req.decided_at = now
-        req.reason = reason
-        tx.status = TransactionStatus.REJECTED
-        tx.rejected_reason = reason
-        APPROVAL_DECISIONS.labels("rejected", approver.role.value).inc()
-        await audit.record(
-            db,
-            actor_id=approver.id,
-            action="APPROVAL_REJECTED",
-            object_type="approval",
-            object_id=req.id,
-            payload={"transaction_id": str(tx.id), "amount": str(tx.amount), "reason": reason},
-        )
-        await db.commit()
-        return {
-            "approval_id": str(req.id),
-            "status": req.status.value,
+
+async def _escalate(
+    db: AsyncSession,
+    req: ApprovalRequest,
+    tx: Transaction,
+    approver: User,
+    supervisor_max,
+) -> tuple[dict, int]:
+    """APPROVE di atas limit supervisor → naik ke manager (WORKFLOWS §5)."""
+    req.status = ApprovalStatus.ESCALATED
+    req.current_role = UserRole.MANAGER
+    req.escalation_level += 1
+    APPROVAL_DECISIONS.labels("escalated", approver.role.value).inc()
+    await audit.record(
+        db,
+        actor_id=approver.id,
+        action="APPROVAL_ESCALATED",
+        object_type="approval",
+        object_id=req.id,
+        payload={
             "transaction_id": str(tx.id),
-            "transaction_status": tx.status.value,
-        }, 200
+            "amount": str(tx.amount),
+            "supervisor_max": str(supervisor_max),
+            "escalation_level": req.escalation_level,
+        },
+    )
+    await db.commit()
+    return {
+        "approval_id": str(req.id),
+        "status": req.status.value,
+        "transaction_id": str(tx.id),
+        "transaction_status": tx.status.value,
+        "detail": f"Di atas limit supervisor, naik ke manager (level {req.escalation_level})",
+    }, 200
 
-    # --- APPROVE: cek limit role (BR-07) ---
-    settings = get_settings()
-    if approver.role == UserRole.SUPERVISOR and tx.amount > settings.approval_supervisor_max:
-        # Di atas limit supervisor → ESKALASI naik ke manager (WORKFLOWS §5)
-        req.status = ApprovalStatus.ESCALATED
-        req.current_role = UserRole.MANAGER
-        req.escalation_level += 1
-        APPROVAL_DECISIONS.labels("escalated", approver.role.value).inc()
-        await audit.record(
-            db,
-            actor_id=approver.id,
-            action="APPROVAL_ESCALATED",
-            object_type="approval",
-            object_id=req.id,
-            payload={
-                "transaction_id": str(tx.id),
-                "amount": str(tx.amount),
-                "supervisor_max": str(settings.approval_supervisor_max),
-                "escalation_level": req.escalation_level,
-            },
-        )
-        await db.commit()
-        return {
-            "approval_id": str(req.id),
-            "status": req.status.value,
-            "transaction_id": str(tx.id),
-            "transaction_status": tx.status.value,
-            "detail": f"Di atas limit supervisor, naik ke manager (level {req.escalation_level})",
-        }, 200
 
-    # --- APPROVE: eksekusi atomik transfer ---
+async def _approve_execute(
+    db: AsyncSession, req: ApprovalRequest, tx: Transaction, approver: User
+) -> tuple[dict, int]:
+    """APPROVE dalam limit → eksekusi atomik transfer (ledger 2 baris)."""
     source = await db.get(Account, tx.source_account_id)
     dest = await db.get(Account, tx.dest_account_id)
     if source is None or dest is None:
@@ -182,3 +183,28 @@ async def decide(
         "transaction_id": str(tx.id),
         "transaction_status": tx.status.value,
     }, 200
+
+
+async def decide(
+    db: AsyncSession,
+    *,
+    request_id: UUID,
+    approver: User,
+    approve: bool,
+    reason: str | None,
+) -> tuple[dict, int]:
+    """Orkestrasi putusan: load → reject ATAU eskalasi ATAU eksekusi."""
+    req = await _load_open_request(db, request_id, approver)
+    tx = await db.get(Transaction, req.object_id)
+    if tx is None:
+        raise ApprovalError(409, "Objek transaksi tidak ditemukan")
+
+    if not approve:
+        return await _reject(db, req, tx, approver, reason or "")
+
+    # APPROVE: cek limit role (BR-07)
+    settings = get_settings()
+    if approver.role == UserRole.SUPERVISOR and tx.amount > settings.approval_supervisor_max:
+        return await _escalate(db, req, tx, approver, settings.approval_supervisor_max)
+
+    return await _approve_execute(db, req, tx, approver)
