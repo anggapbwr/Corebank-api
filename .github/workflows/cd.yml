@@ -1,0 +1,87 @@
+# CD — Fase 8 (docs/ROADMAP.md): deploy HANYA dari build yang lulus CI.
+# Trigger: workflow_run — berjalan setelah workflow "CI" selesai sukses di main.
+# Alur: ambil image GHCR (sha-<7> = artefak yang lulus CI) → cluster kind →
+#       bootstrap → rolling update di bawah load + smoke + jalur rollback
+#       → simulasi canary → bukti akhir → bersihkan cluster.
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: read # pull image GHCR
+
+concurrency:
+  group: cd-main
+  cancel-in-progress: false # deploy lama jangan dibatalkan di tengah jalan
+
+jobs:
+  deploy:
+    name: Deploy ke kind (rolling + smoke + canary)
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.HEAD_SHA }} # deploy commit yang TEPAT lulus CI
+
+      - name: Install kind (pin v0.33.0)
+        run: |
+          curl -fsSL -o /usr/local/bin/kind \
+            https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64
+          chmod +x /usr/local/bin/kind
+          kind version
+
+      - name: Cluster + ingress-nginx
+        run: |
+          kind create cluster --config deploy/k8s/kind-config.yaml
+          kubectl apply -f deploy/k8s/ingress-nginx-kind.yaml
+          kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=300s
+
+      - name: Login GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ambil image hasil CI (sha-<7>) + samakan nama lokal
+        run: |
+          SHORT_SHA="${HEAD_SHA:0:7}"
+          IMG="ghcr.io/anggapbwr/corebank-api:sha-$SHORT_SHA"
+          echo "Deploy $IMG"
+          docker pull "$IMG"
+          docker tag "$IMG" corebank-api:kind # nama yang diharapkan apply.sh
+
+      - name: Bootstrap (apply.sh — datastore, migrasi Job, app, ingress)
+        run: bash deploy/k8s/apply.sh
+
+      - name: "CD: rolling update di bawah load + smoke + rollback path"
+        run: bash deploy/k8s/cd.sh
+
+      - name: "Simulasi canary (bobot 20%) + pembuktian split"
+        run: |
+          bash deploy/k8s/canary.sh up corebank-api:kind
+          bash deploy/k8s/canary.sh sample 60
+          bash deploy/k8s/canary.sh down
+
+      - name: "Demo rollback (image rusak → rollout gagal → undo → pulih)"
+        run: bash deploy/k8s/cd.sh --demo-rollback
+
+      - name: Bukti akhir
+        if: always()
+        run: |
+          kubectl get pods -A -o wide || true
+          kubectl -n corebank get ingress || true
+          echo "smoke: $(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://localhost:8080/healthz)"
+
+      - name: Bersihkan cluster
+        if: always()
+        run: kind delete cluster --name corebank || true

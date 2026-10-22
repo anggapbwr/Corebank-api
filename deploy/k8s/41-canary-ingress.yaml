@@ -1,0 +1,24 @@
+# Ingress CANARY (Fase 8) — dipakai canary.sh, BUKAN bootstrap biasa.
+# Atribut canary: "true" membuat nginx mengarahkan SEBAGIAN trafik (canary-weight,
+# di-set canary.sh; default 0 = semua trafik tetap ke blue) ke Service corebank-green.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: corebank-canary
+  namespace: corebank
+  labels:
+    app.kubernetes.io/part-of: corebank
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: corebank-green
+                port:
+                  number: 80

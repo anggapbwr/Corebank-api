@@ -22,7 +22,7 @@ double-entry ledger, idempotency, RBAC, approval workflow, CI/CD, Kubernetes, ob
 | Observability (Prometheus/Grafana/Loki) | ✅ | metrics HTTP+bisnis, log JSON+correlation ID, alert DB mati → Alertmanager/Telegram |
 | Dashboard workbench (Jinja + HTMX) | ✅ | tanpa login; kartu System Health + panel alert kanan (proxy Alertmanager) |
 | Kubernetes (kind) | ✅ | cluster lokal + ingress-nginx; probes liveness/readiness; 2 replica; migrasi = Job terpisah |
-| Zero-downtime CD (rolling + rollback) | 🚧 Fase 8 | readiness/liveness probe, rolling update + auto rollback |
+| CD zero-downtime (rolling + smoke + rollback + canary) | ✅ | `cd.sh`: rolling update di bawah load → smoke → rollback otomatis; `canary.sh` (ingress-nginx, bobot 20%); workflow CD jalan otomatis setelah CI hijau |
 | Hardening (backup/restore, load test) | 🚧 Fase 9 | RPO/RTO restore drill, k6, OWASP review |
 
 ## 🏗️ Arsitektur (target)
@@ -92,6 +92,23 @@ kind delete cluster --name corebank   # bersihkan cluster (PVC ikut terhapus)
 `apply.sh` idempoten — jalankan ulang untuk menerapkan perubahan manifest
 (migrasi diulang tiap run, secret JWT tidak dirotasi otomatis).
 
+**CD (Fase 8) — deploy versi baru ke cluster itu:**
+
+```bash
+bash deploy/k8s/cd.sh                  # build → rolling update di bawah load → smoke
+                                       # gagal → kubectl rollout undo otomatis, exit 1
+bash deploy/k8s/cd.sh --demo-rollback  # buktikan jalur rollback (image sengaja rusak)
+
+# Simulasi canary (persen trafik ke versi baru via ingress-nginx):
+bash deploy/k8s/canary.sh up corebank-api:kind   # pasang green + bobot 20%
+bash deploy/k8s/canary.sh sample 120             # ukur split blue/green dari log
+bash deploy/k8s/canary.sh down                   # batalkan (promote: canary.sh promote)
+```
+
+Di GitHub: push ke main → **CI** (lint/test/build/GHCR) → **CD**
+(`.github/workflows/cd.yml`) deploy image hasil CI ke cluster kind di runner:
+rolling + smoke + demo rollback + canary, lalu cluster dibersihkan.
+
 **Endpoint lokal:**
 
 | URL | Isi |
@@ -148,9 +165,9 @@ corebank-api/
 ├── docs/                    # ⭐ kontrak desain — baca sebelum sentuh kode
 ├── deploy/
 │   ├── docker/              # Dockerfile multi-stage + docker-compose.yml ✅
-│   ├── k8s/                 # Fase 7 ✅: kind-config, manifest (00..40), apply.sh, ingress-nginx
+│   ├── k8s/                 # Fase 7-8 ✅: kind-config, manifest (00..40), apply.sh, cd.sh, canary.sh
 │   └── monitoring/          # prometheus/grafana/loki/alertmanager (Fase 5)
-├── .github/workflows/       # CI/CD (Fase 4)
+├── .github/workflows/       # CI (Fase 4) + CD ke kind (Fase 8)
 └── pyproject.toml           # deps + ruff + pytest config
 ```
 
@@ -165,7 +182,7 @@ corebank-api/
 | 5 | Observability (Prometheus/Grafana/Loki/Alert) | ✅ **Selesai** — verifikasi 8/8: rate/latency terukur, dashboard terprovision, log → Loki, **mati Postgres → alert firing → resolve** |
 | 6 | Dashboard Workbench (Jinja+HTMX, tanpa login) | ✅ **Selesai** — verifikasi 3/3 skenario live: sehat, AM mati (graceful), alert firing → panel kanan; 39 test, coverage 86% |
 | 7 | Kubernetes (kind): probe, ConfigMap/Secret | ✅ **Selesai** — `apply.sh` bootstrap terurut; 2/2 pod + ingress hijau; **90/90 request 200 saat 1 pod dihapus paksa** (self-healing) |
-| 8 | CD: rolling update + auto rollback | ⬜ |
+| 8 | CD: rolling update + auto rollback | ✅ **Selesai** — jalur normal: **90/90 request 200** saat rolling; demo deploy gagal: **184/184 200** + rollback terbukti; canary N=120 → split 81%/18% (target 20%); workflow **CD** (GH Actions) otomatis setelah CI sukses |
 | 9 | Hardening: backup/restore drill, k6, OWASP | ⬜ |
 
 Acceptance criteria tiap fase: [`docs/ROADMAP.md`](docs/ROADMAP.md)

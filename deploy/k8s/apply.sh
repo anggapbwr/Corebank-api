@@ -32,7 +32,8 @@ step "4/7 secret (sekali saja — JWT_SECRET tidak dirotasi otomatis)"
 if kubectl -n "$NS" get secret corebank-secret >/dev/null 2>&1; then
   echo "secret sudah ada — lewati (hapus manual untuk rotasi + restart rollout app)"
 else
-  JWT_SECRET="${JWT_SECRET:-$(python -c 'import secrets; print(secrets.token_hex(32))')}"
+  JWT_SECRET="${JWT_SECRET:-$(python -c 'import secrets; print(secrets.token_hex(32))' 2>/dev/null \
+    || python3 -c 'import secrets; print(secrets.token_hex(32))')}"
   kubectl -n "$NS" create secret generic corebank-secret \
     --from-literal=DATABASE_URL='postgresql+psycopg://corebank:corebank@postgres:5432/corebank' \
     --from-literal=JWT_SECRET="$JWT_SECRET" \
