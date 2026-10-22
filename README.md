@@ -123,8 +123,9 @@ pip-audit                               # CVE dependensi — juga jalan sebagai 
 
 | URL | Isi |
 |---|---|
-| `http://localhost:8000/` | **Dashboard workbench** — System Health + panel alert (kanan) |
+| `http://localhost:8000/` | **Dashboard workbench** — System Health + panel alert (kanan), tanpa login |
 | `http://localhost:8000/api/system/health` | Gauge monitor → JSON (db/redis/antrean) |
+| `http://localhost:8000/mywork` | **My Work per role** (login cookie): antrean approver + aksi, transaksi teller, jejak auditor, rekening nasabah |
 | `http://localhost:8000/api/system/alerts` | Proxy Alertmanager → JSON alert aktif |
 | `http://localhost:8000/docs` | Swagger UI interaktif |
 | `http://localhost:8000/healthz` | Liveness — proses hidup? (tanpa cek dependency) |
@@ -193,6 +194,7 @@ corebank-api/
 | 4 | Testing & CI (GitHub Actions → GHCR) | ✅ **Selesai** — lint + pytest coverage gate 80% (lokal 87%) + Trivy scan + push `sha-<7digit>` ke GHCR |
 | 5 | Observability (Prometheus/Grafana/Loki/Alert) | ✅ **Selesai** — verifikasi 8/8: rate/latency terukur, dashboard terprovision, log → Loki, **mati Postgres → alert firing → resolve** |
 | 6 | Dashboard Workbench (Jinja+HTMX, tanpa login) | ✅ **Selesai** — verifikasi 3/3 skenario live: sehat, AM mati (graceful), alert firing → panel kanan; 39 test, coverage 86% |
+| 6b | My Work per role (login cookie + aksi dari UI) | ✅ **Selesai** — `/mywork` session-cookie HttpOnly+SameSite=lax (jalur rate limit login yang sama), panel per role (approver/teller/auditor/nasabah), approve+eskalasi+reject BR-08 dari UI lewat `decide()` yang sama dgn API, RBAC dicek server-side; 16 test |
 | 7 | Kubernetes (kind): probe, ConfigMap/Secret | ✅ **Selesai** — `apply.sh` bootstrap terurut; 2/2 pod + ingress hijau; **90/90 request 200 saat 1 pod dihapus paksa** (self-healing) |
 | 8 | CD: rolling update + auto rollback | ✅ **Selesai** — jalur normal: **90/90 request 200** saat rolling; demo deploy gagal: **184/184 200** + rollback terbukti; canary N=120 → split 81%/18% (target 20%); workflow **CD** (GH Actions) otomatis setelah CI sukses |
 | 9 | Hardening: backup/restore drill, k6, OWASP | ✅ **Selesai** — restore drill LULUS (8/8 tabel, 14 dtk ≤ RTO 3600, umur 0 jam ≤ RPO 24h); k6 **100 RPS, p95 = 315 ms** (target <2 dtk), 0% gagal; reconciliation Σledger vs saldo rekening (+ alert); checklist OWASP terisi + rate limit login 429; pip-audit 0 CVE & gitleaks 14 commit bersih **di CI** |

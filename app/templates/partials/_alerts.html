@@ -1,3 +1,9 @@
+{% if alerts is not defined %}
+  {# Halaman selain dashboard tak mem-fetch alert (hemat 1 request) —
+     polling HTMX tetap mengisi panel ini tiap 20 detik. #}
+  <h2>🔔 Alerts <span class="count zero">–</span></h2>
+  <div class="empty">Memuat alert…</div>
+{% else %}
 <h2>
   🔔 Alerts
   {% if alerts.alerts %}
@@ -18,4 +24,5 @@
   {% endfor %}
 {% else %}
   <div class="empty">Tidak ada alert aktif ✓</div>
+{% endif %}
 {% endif %}

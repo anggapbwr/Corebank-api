@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}CoreBank — My Work{% endblock %}
+{% block content %}
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h1>My Work — {{ user.role.value }}</h1>
+    <button class="btn ghost sm" hx-get="/fragments/mywork"
+            hx-target="#mywork-panel" hx-swap="innerHTML">⟳ Segarkan</button>
+  </div>
+  <div id="mywork-panel">
+    {% include "partials/_mywork.html" %}
+  </div>
+  <p class="note">
+    Panel diperbarui otomatis setelah tiap aksi; RBAC dicek ulang di server —
+    tombol yang tak muncul di menu juga tetap ditolak API.
+  </p>
+{% endblock %}

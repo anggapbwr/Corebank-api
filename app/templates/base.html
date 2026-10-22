@@ -46,13 +46,64 @@
     .empty, .down { color: var(--muted); font-size: 13px; }
     .down { border-left: 3px solid var(--warn); background: #fff8ee; border-radius: 6px;
             padding: 8px 10px; }
+    /* --- My Work (lanjutan Fase 6) --- */
+    nav.top a { color: #cbd5e1; text-decoration: none; font-size: 14px; margin-left: 14px; }
+    nav.top a:hover, nav.top a.active { color: #fff; }
+    .who { font-size: 13px; margin-right: 10px; opacity: .85; }
+    .who .role { background: #1d2939; border-radius: 999px; padding: 1px 8px; font-size: 11px; }
+    .btn { background: var(--info); color: #fff; border: 0; border-radius: 7px;
+           padding: 7px 14px; font-size: 13px; cursor: pointer; }
+    .btn:hover { filter: brightness(1.07); }
+    .btn.ghost { background: #344054; }
+    .btn.danger { background: var(--bad); }
+    .btn.sm { padding: 4px 10px; font-size: 12px; }
+    .flash { border-radius: 7px; padding: 9px 12px; margin-bottom: 12px; font-size: 13.5px; }
+    .flash.ok { background: #ecfdf3; border: 1px solid #abefc6; color: #067647; }
+    .flash.err { background: #fef3f2; border: 1px solid #fecdc9; color: #b42318; }
+    table.work { width: 100%; border-collapse: collapse; background: var(--card);
+                 border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    table.work th, table.work td { text-align: left; padding: 9px 12px; font-size: 13.5px;
+                                   border-bottom: 1px solid var(--line); }
+    table.work th { background: #f9fafb; color: var(--muted); font-size: 11.5px;
+                    text-transform: uppercase; letter-spacing: .5px; }
+    table.work tr:last-child td { border-bottom: 0; }
+    .pill { border-radius: 999px; padding: 1px 9px; font-size: 11.5px; font-weight: 600; }
+    .pill.pending { background: #fef0c7; color: #b54708; }
+    .pill.escalated { background: #fee4e2; color: #b42318; }
+    .pill.executed, .pill.active { background: #d1fadf; color: #067647; }
+    .pill.rejected, .pill.frozen { background: #fee4e2; color: #b42318; }
+    .actions { display: flex; gap: 6px; }
+    .login-wrap { max-width: 380px; margin: 48px auto; }
+    .login-wrap label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 4px; }
+    .login-wrap input { width: 100%; padding: 9px 11px; font-size: 14px;
+                        border: 1px solid var(--line); border-radius: 7px; }
+    .login-wrap .btn { width: 100%; margin-top: 18px; padding: 10px; }
+    .queue-item { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+                  padding: 12px 14px; margin-bottom: 10px; display: flex;
+                  justify-content: space-between; align-items: center; gap: 12px; }
+    .queue-item .amount { font-size: 17px; font-weight: 700; }
+    .queue-item .meta { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
     @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">🏦 CoreBank <span class="muted">Workbench</span></div>
-    <div class="brand muted">monitoring &amp; alert</div>
+    <div style="display:flex;align-items:center">
+      <div class="brand">🏦 CoreBank <span class="muted">Workbench</span></div>
+      <nav class="top">
+        <a href="/" class="{% if active_nav == 'dashboard' %}active{% endif %}">Monitoring</a>
+        <a href="/mywork" class="{% if active_nav == 'mywork' %}active{% endif %}">My Work</a>
+      </nav>
+    </div>
+    <div style="display:flex;align-items:center">
+      {% if user %}
+        <span class="who">{{ user.username }} <span class="role">{{ user.role.value }}</span></span>
+        <button class="btn ghost sm"
+                hx-post="/logout" hx-swap="none">Logout</button>
+      {% else %}
+        <a href="/login" style="color:#cbd5e1;font-size:13px;text-decoration:none">Login</a>
+      {% endif %}
+    </div>
   </header>
   <div class="layout">
     <main class="content">

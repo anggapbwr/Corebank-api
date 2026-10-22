@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}CoreBank — Login{% endblock %}
+{% block content %}
+  <div class="login-wrap">
+    <div class="card">
+      <h1 style="font-size:17px;margin:0 0 4px">Login Workbench</h1>
+      <p class="note">Sesi memakai cookie HttpOnly (15 menit).</p>
+      {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+      <form method="post" action="/login">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password"
+               autocomplete="current-password" required>
+        <button class="btn" type="submit">Masuk</button>
+      </form>
+    </div>
+    <p class="note" style="text-align:center">
+      Monitoring tetap bisa dibuka tanpa login di <a href="/">halaman utama</a>.
+    </p>
+  </div>
+{% endblock %}

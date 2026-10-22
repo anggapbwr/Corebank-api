@@ -1,0 +1,92 @@
+{% if flash %}<div class="flash {{ flash.kind }}">{{ flash.text }}</div>{% endif %}
+
+{% if user.role.value in ['supervisor', 'manager'] %}
+  {# --- APPROVER: antrean approval + aksi --- #}
+  {% if queue %}
+    {% for row in queue %}
+      <div class="queue-item" id="req-{{ row.req.id }}">
+        <div>
+          <div class="amount">Rp {{ "{:,.0f}".format(row.tx.amount) if row.tx else '?' }}</div>
+          <div class="meta">
+            transfer {{ row.req.object_id }}
+            · {{ row.req.status.value }}
+            {% if row.req.escalation_level > 1 %}· level {{ row.req.escalation_level }}{% endif %}
+            · diajukan {{ row.req.created_at.strftime('%d %b %H:%M') }} UTC
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn sm" hx-post="/mywork/approve/{{ row.req.id }}"
+                  hx-target="#mywork-panel" hx-swap="innerHTML"
+                  {% if user.role.value == 'supervisor' and row.tx
+                        and row.tx.amount > 250000000 %}
+                  title="Di atas limit supervisor — akan eskalasi ke manager"
+                  {% endif %}>✔ Approve</button>
+          <button class="btn danger sm" hx-post="/mywork/reject/{{ row.req.id }}"
+                  hx-target="#mywork-panel" hx-swap="innerHTML"
+                  hx-prompt="Alasan penolakan (wajib, BR-08):">✖ Reject</button>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">Antrean kosong — tidak ada yang menunggu putusanmu. 🎉</p>
+  {% endif %}
+
+{% elif user.role.value in ['teller', 'cs'] %}
+  {# --- FRONTLINER: transfer yang saya proses --- #}
+  {% if my_transfers %}
+    <table class="work">
+      <thead><tr><th>Waktu</th><th>Nominal</th><th>Status</th><th>Ref</th></tr></thead>
+      <tbody>
+        {% for tx in my_transfers %}
+        <tr>
+          <td>{{ tx.created_at.strftime('%d %b %Y %H:%M') }}</td>
+          <td>Rp {{ "{:,.0f}".format(tx.amount) }}</td>
+          <td><span class="pill {{ tx.status.value|lower }}">{{ tx.status.value }}</span></td>
+          <td class="note">{{ tx.id }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">Belum ada transaksi yang kamu proses.</p>
+  {% endif %}
+
+{% elif user.role.value in ['auditor', 'ops_risk'] %}
+  {# --- READ-ONLY: jejak audit --- #}
+  {% if audit_logs %}
+    <table class="work">
+      <thead><tr><th>Waktu</th><th>Aksi</th><th>Objek</th><th>Aktor</th></tr></thead>
+      <tbody>
+        {% for log in audit_logs %}
+        <tr>
+          <td>{{ log.created_at.strftime('%d %b %Y %H:%M') }}</td>
+          <td>{{ log.action }}</td>
+          <td class="note">{{ log.object_type }}{% if log.object_id %} · {{ log.object_id }}{% endif %}</td>
+          <td class="note">{{ log.actor_user_id or 'system' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">Belum ada jejak audit.</p>
+  {% endif %}
+
+{% else %}
+  {# --- NASABAH: rekening saya (scoped by user_id — BOLA aman) --- #}
+  {% if accounts %}
+    <table class="work">
+      <thead><tr><th>No. Rekening</th><th>Saldo</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for acc in accounts %}
+        <tr>
+          <td>{{ acc.account_number }}</td>
+          <td>Rp {{ "{:,.2f}".format(acc.balance) }}</td>
+          <td><span class="pill {{ acc.status.value|lower }}">{{ acc.status.value }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="empty">Belum ada rekening terdaftar untuk akun ini.</p>
+  {% endif %}
+{% endif %}
