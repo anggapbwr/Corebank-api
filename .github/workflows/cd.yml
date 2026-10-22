@@ -34,9 +34,11 @@ jobs:
 
       - name: Install kind (pin v0.33.0)
         run: |
-          curl -fsSL -o /usr/local/bin/kind \
+          # unduh ke $RUNNER_TEMP (writable), baru sudo install — user runner
+          # tidak punya izin tulis langsung ke /usr/local/bin
+          curl -fsSL -o "$RUNNER_TEMP/kind" \
             https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64
-          chmod +x /usr/local/bin/kind
+          sudo install -m 0755 "$RUNNER_TEMP/kind" /usr/local/bin/kind
           kind version
 
       - name: Cluster + ingress-nginx
