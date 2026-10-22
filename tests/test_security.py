@@ -1,4 +1,4 @@
-"""Unit test security — tanpa database."""
+"""Unit test security + rate limit login NFR-02 (butuh DB & Redis — disiapkan conftest)."""
 
 from datetime import timedelta
 from uuid import uuid4
@@ -72,3 +72,46 @@ def test_token_kedaluwarsa_ditolak() -> None:
     )
     with pytest.raises(TokenError):
         decode_token(expired, expected_type="access")
+
+
+def test_rate_limit_login_nfr02() -> None:
+    """NFR-02: 5 gagal/menit → percobaan ke-6 kena 429; setelah jendela bersih → normal lagi."""
+    import asyncio
+
+    import redis.asyncio as aioredis
+    from fastapi.testclient import TestClient
+
+    from app.api.routes.auth import _rate_keys
+    from app.core.config import get_settings
+    from app.main import app
+
+    client = TestClient(app)
+    username = "rate-limit-uji-tidak-ada"
+    payload = {"username": username, "password": "salah-banget"}  # ≥6 char: bukan 422
+    keys = _rate_keys("testclient", username)  # IP TestClient = "testclient"
+
+    async def _clean() -> None:
+        # client redis SEKALI PAKAI — aman terhadap ganti event loop antar panggilan
+        c = aioredis.from_url(
+            get_settings().redis_url,
+            decode_responses=True,
+            socket_connect_timeout=3,
+            socket_timeout=3,
+        )
+        await c.delete(*keys)
+        await c.aclose()
+
+    asyncio.run(_clean())
+    try:
+        for i in range(5):
+            r = client.post("/auth/login", json=payload)
+            assert r.status_code == 401, f"percobaan {i + 1}: {r.status_code}"
+        r = client.post("/auth/login", json=payload)
+        assert r.status_code == 429, f"percobaan ke-6 harus diblokir, dapat {r.status_code}"
+
+        # jendela di-reset (simulasi lewatnya 60 dtk) → login berfungsi normal lagi
+        asyncio.run(_clean())
+        r = client.post("/auth/login", json=payload)
+        assert r.status_code == 401, "setelah reset buka lagi jadi 401 (bukan 429)"
+    finally:
+        asyncio.run(_clean())

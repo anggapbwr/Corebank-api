@@ -240,9 +240,20 @@ def test_br04_ledger_append_only_ditegakkan_db() -> None:
                 text(
                     "INSERT INTO accounts "
                     "(id, customer_id, account_number, type, balance, status, created_at) "
-                    "VALUES (:id, :cid, :num, 'savings', 0, 'ACTIVE', now())"
+                    "VALUES (:id, :cid, :num, 'savings', 100, 'ACTIVE', now())"
                 ),
                 {"id": acc_id, "cid": cust_id, "num": f"39{uuid.uuid4().hex[:10]}"},
+            )
+            # Rekening suspense sebagai pasangan — jurnal wajib double-entry
+            # (BR-05) supaya data fixture tetap bisa lolos reconciliation Fase 9
+            vault_id = uuid.uuid4()
+            await db.execute(
+                text(
+                    "INSERT INTO accounts "
+                    "(id, customer_id, account_number, type, balance, status, created_at) "
+                    "VALUES (:id, :cid, :num, 'savings', -100, 'ACTIVE', now())"
+                ),
+                {"id": vault_id, "cid": cust_id, "num": f"99{uuid.uuid4().hex[:10]}"},
             )
             tx_id = uuid.uuid4()
             await db.execute(
@@ -260,6 +271,15 @@ def test_br04_ledger_append_only_ditegakkan_db() -> None:
                     "VALUES (:id, :tid, :aid, 'CREDIT', 100, 100, now())"
                 ),
                 {"id": uuid.uuid4(), "tid": tx_id, "aid": acc_id},
+            )
+            await db.execute(
+                text(
+                    "INSERT INTO ledger_entries "
+                    "(id, transaction_id, account_id, direction, amount, "
+                    "balance_after, created_at) "
+                    "VALUES (:id, :tid, :aid, 'DEBIT', 100, -100, now())"
+                ),
+                {"id": uuid.uuid4(), "tid": tx_id, "aid": vault_id},
             )
             await db.commit()
 
@@ -306,6 +326,57 @@ def test_br05_ledger_balanced_dan_balance_after() -> None:
                 )
                 db.add(acc)
                 accounts.append(acc)
+            # Saldo awal dicetak lewat jurnal pembukaan double-entry: suspense
+            # DEBIT 2.000.000, tiap rekening CREDIT 1.000.000 — tanpa ini
+            # reconciliation (Fase 9) melaporkan saldo yang tak dijelaskan ledger.
+            from app.models.ledger import LedgerEntry as _LE
+
+            opening_cust = Customer(full_name="Opening Suspense", ktp_hash="h")
+            db.add(opening_cust)
+            await db.flush()
+            suspense = Account(
+                customer_id=opening_cust.id,
+                account_number="39" + secrets.token_hex(5),
+                type=AccountType.SAVINGS,
+                balance=Decimal("-2000000"),
+                status=AccountStatus.ACTIVE,
+            )
+            db.add(suspense)
+            await db.flush()
+            opening_tx = Transaction(
+                type=TransactionType.ADJUSTMENT,
+                amount=Decimal("2000000"),
+                status=TransactionStatus.EXECUTED,
+                created_by=user.id,
+            )
+            db.add(opening_tx)
+            await db.flush()
+            db.add_all(
+                [
+                    _LE(
+                        transaction_id=opening_tx.id,
+                        account_id=suspense.id,
+                        direction=LedgerDirection.DEBIT,
+                        amount=Decimal("2000000"),
+                        balance_after=Decimal("-2000000"),
+                    ),
+                    _LE(
+                        transaction_id=opening_tx.id,
+                        account_id=accounts[0].id,
+                        direction=LedgerDirection.CREDIT,
+                        amount=Decimal("1000000"),
+                        balance_after=Decimal("1000000"),
+                    ),
+                    _LE(
+                        transaction_id=opening_tx.id,
+                        account_id=accounts[1].id,
+                        direction=LedgerDirection.CREDIT,
+                        amount=Decimal("1000000"),
+                        balance_after=Decimal("1000000"),
+                    ),
+                ]
+            )
+            await db.flush()
             tx = Transaction(
                 type=TransactionType.TRANSFER,
                 amount=Decimal("250000"),

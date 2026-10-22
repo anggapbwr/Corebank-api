@@ -26,3 +26,4 @@ Thumbs.db
 
 # Docker volumes (jika pernah mount lokal)
 deploy/docker/.data/
+backups/

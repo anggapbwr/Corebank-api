@@ -23,7 +23,7 @@ double-entry ledger, idempotency, RBAC, approval workflow, CI/CD, Kubernetes, ob
 | Dashboard workbench (Jinja + HTMX) | ✅ | tanpa login; kartu System Health + panel alert kanan (proxy Alertmanager) |
 | Kubernetes (kind) | ✅ | cluster lokal + ingress-nginx; probes liveness/readiness; 2 replica; migrasi = Job terpisah |
 | CD zero-downtime (rolling + smoke + rollback + canary) | ✅ | `cd.sh`: rolling update di bawah load → smoke → rollback otomatis; `canary.sh` (ingress-nginx, bobot 20%); workflow CD jalan otomatis setelah CI hijau |
-| Hardening (backup/restore, load test) | 🚧 Fase 9 | RPO/RTO restore drill, k6, OWASP review |
+| Hardening & DR | ✅ | restore drill terverifikasi, reconciliation ledger + alert, k6 100 RPS p95 315 ms, checklist OWASP + pip-audit/gitleaks di CI |
 
 ## 🏗️ Arsitektur (target)
 
@@ -109,6 +109,16 @@ Di GitHub: push ke main → **CI** (lint/test/build/GHCR) → **CD**
 (`.github/workflows/cd.yml`) deploy image hasil CI ke cluster kind di runner:
 rolling + smoke + demo rollback + canary, lalu cluster dibersihkan.
 
+**Hardening & DR (Fase 9):**
+
+```bash
+bash deploy/backup/backup.sh            # pg_dump → backups/ (retensi 7; jadwal harian di komentar skrip)
+bash deploy/backup/restore-drill.sh     # restore ke container BARU + verifikasi (NFR-07)
+k6 run deploy/load/k6-nfr01.js          # NFR-01: 100 RPS, p95 < 2 detik
+python -m app.scripts.reconcile         # Σ ledger vs saldo rekening (exit 1 = selisih)
+pip-audit                               # CVE dependensi — juga jalan sebagai job CI
+```
+
 **Endpoint lokal:**
 
 | URL | Isi |
@@ -166,6 +176,8 @@ corebank-api/
 ├── deploy/
 │   ├── docker/              # Dockerfile multi-stage + docker-compose.yml ✅
 │   ├── k8s/                 # Fase 7-8 ✅: kind-config, manifest (00..40), apply.sh, cd.sh, canary.sh
+│   ├── backup/              # Fase 9 ✅: backup.sh + restore-drill.sh (NFR-07)
+│   ├── load/                # Fase 9 ✅: k6-nfr01.js (NFR-01)
 │   └── monitoring/          # prometheus/grafana/loki/alertmanager (Fase 5)
 ├── .github/workflows/       # CI (Fase 4) + CD ke kind (Fase 8)
 └── pyproject.toml           # deps + ruff + pytest config
@@ -183,7 +195,7 @@ corebank-api/
 | 6 | Dashboard Workbench (Jinja+HTMX, tanpa login) | ✅ **Selesai** — verifikasi 3/3 skenario live: sehat, AM mati (graceful), alert firing → panel kanan; 39 test, coverage 86% |
 | 7 | Kubernetes (kind): probe, ConfigMap/Secret | ✅ **Selesai** — `apply.sh` bootstrap terurut; 2/2 pod + ingress hijau; **90/90 request 200 saat 1 pod dihapus paksa** (self-healing) |
 | 8 | CD: rolling update + auto rollback | ✅ **Selesai** — jalur normal: **90/90 request 200** saat rolling; demo deploy gagal: **184/184 200** + rollback terbukti; canary N=120 → split 81%/18% (target 20%); workflow **CD** (GH Actions) otomatis setelah CI sukses |
-| 9 | Hardening: backup/restore drill, k6, OWASP | ⬜ |
+| 9 | Hardening: backup/restore drill, k6, OWASP | ✅ **Selesai** — restore drill LULUS (8/8 tabel, 14 dtk ≤ RTO 3600, umur 0 jam ≤ RPO 24h); k6 **100 RPS, p95 = 315 ms** (target <2 dtk), 0% gagal; reconciliation Σledger vs saldo rekening (+ alert); checklist OWASP terisi + rate limit login 429; pip-audit 0 CVE & gitleaks 14 commit bersih **di CI** |
 
 Acceptance criteria tiap fase: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
@@ -196,6 +208,7 @@ Semua keputusan desain ada di `docs/`, dibuat **sebelum kode** (prinsip: dokumen
 - [`docs/ERD.md`](docs/ERD.md) — 7 tabel + alasan tiap keputusan desain
 - [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) — role, work queue, state machine, contoh eskalasi Rp 400 juta
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — 9 fase + acceptance criteria
+- [`docs/security/OWASP_API_TOP10.md`](docs/security/OWASP_API_TOP10.md) — checklist OWASP API Top 10 + temuan security pass Fase 9
 - [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — aturan Git, kode, DB, testing, logging
 
 ## 📜 Prinsip Inti (non-negotiable)

@@ -35,6 +35,9 @@ class Settings(BaseSettings):
 
     idempotency_ttl_seconds: int = 86400  # 24 jam — retry window
 
+    # Reconciliation ledger (Fase 9) — interval background check di app
+    reconcile_interval_seconds: int = 900  # 15 menit
+
     @property
     def psycopg_dsn(self) -> str:
         return self.database_url.replace("postgresql+psycopg://", "postgresql://")

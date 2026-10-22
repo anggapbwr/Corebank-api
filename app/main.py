@@ -21,19 +21,23 @@ from app.api.routes import (
 )
 from app.core.config import get_settings
 from app.core.observability import ObservabilityMiddleware, monitor_loop, setup_logging
+from app.services.reconcile import reconcile_loop
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
-    """Startup: logging JSON + background monitor (gauge DB/Redis/antrean)."""
+    """Startup: logging JSON + monitor gauge + reconciliation periodik."""
     settings = get_settings()
     setup_logging(settings.log_level)
     monitor_task = asyncio.create_task(monitor_loop())
     application.state.monitor_task = monitor_task
+    recon_task = asyncio.create_task(reconcile_loop(settings.reconcile_interval_seconds))
+    application.state.recon_task = recon_task
     yield
-    monitor_task.cancel()
-    with suppress(asyncio.CancelledError):
-        await monitor_task
+    for task in (monitor_task, recon_task):
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
 
 
 def create_app() -> FastAPI:

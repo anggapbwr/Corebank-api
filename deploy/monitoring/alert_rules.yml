@@ -48,3 +48,15 @@ groups:
         annotations:
           summary: "Antrean approval menumpuk (>20 selama 10 menit)"
           description: "Supervisor/manager perlu memproses work queue."
+
+      - alert: LedgerReconMismatch
+        expr: corebank_ledger_recon_mismatch > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ledger tidak balance dengan saldo rekening"
+          description: >-
+            Reconciliation (Fase 9) menemukan selisih Σ ledger vs accounts.balance —
+            cek log corebank.reconcile di Loki dan jalankan python -m app.scripts.reconcile
+            untuk detail per rekening. Jangan proses transfer sampai jelas.
