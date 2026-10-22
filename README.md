@@ -20,7 +20,8 @@ double-entry ledger, idempotency, RBAC, approval workflow, CI/CD, Kubernetes, ob
 | Transfer atomic + idempotency | ✅ | Redis SETNX + UNIQUE column (BR-03); approval matrix dari config; work queue + eskalasi; audit trail |
 | CI/CD (GitHub Actions → GHCR) | ✅ | ruff → pytest (coverage gate 80%) → docker build → Trivy scan → push GHCR |
 | Observability (Prometheus/Grafana/Loki) | ✅ | metrics HTTP+bisnis, log JSON+correlation ID, alert DB mati → Alertmanager/Telegram |
-| Dashboard workbench (Jinja + HTMX) | ✅ | tanpa login; kartu System Health + panel alert kanan (proxy Alertmanager) |
+| Dashboard workbench (Jinja + HTMX) | ✅ | tanpa login; kartu System Health + panel alert kanan (proxy Alertmanager); dark mode + design token |
+| My Work per role (login cookie) | ✅ | antrean approve/escalate/reject BR-08 dari UI, transaksi teller, jejak auditor, rekening nasabah; RBAC dicek server |
 | Kubernetes (kind) | ✅ | cluster lokal + ingress-nginx; probes liveness/readiness; 2 replica; migrasi = Job terpisah |
 | CD zero-downtime (rolling + smoke + rollback + canary) | ✅ | `cd.sh`: rolling update di bawah load → smoke → rollback otomatis; `canary.sh` (ingress-nginx, bobot 20%); workflow CD jalan otomatis setelah CI hijau |
 | Hardening & DR | ✅ | restore drill terverifikasi, reconciliation ledger + alert, k6 100 RPS p95 315 ms, checklist OWASP + pip-audit/gitleaks di CI |
@@ -59,6 +60,25 @@ Detail lengkap + 9 ADR: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
 | Orchestration | Kubernetes (kind, lokal) |
 | Monitoring | Prometheus + Grafana + Loki + Alertmanager |
 | Testing | pytest, testcontainers, k6 |
+
+## ⚙️ Konfigurasi Environment
+
+Semua konfigurasi lewat env (pydantic-settings). Salin contoh lalu isi sesuai mesin:
+
+```bash
+cp .env.example .env
+# lalu ganti minimal: JWT_SECRET (lihat komentar di dalam file)
+python -c "import secrets; print(secrets.token_urlsafe(64))"   # generator secret
+```
+
+| Variabel | Wajib? | Keterangan |
+|---|---|---|
+| `DATABASE_URL`, `REDIS_URL`, `AMQP_URL` | ya | default `localhost` (di Docker ditimpa compose ke hostname service) |
+| `JWT_SECRET` | ya | **wajib diganti di produksi** — default hanya untuk dev |
+| `APP_ENV`, `LOG_LEVEL` | tidak | default `dev` / `INFO` |
+| `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | tidak | alert Telegram (Fase 5); kosongkan = alert hanya di UI Alertmanager |
+
+Detail lengkap: [`.env.example`](.env.example) dan [`app/core/config.py`](app/core/config.py).
 
 ## 🚀 Quickstart
 
@@ -153,6 +173,14 @@ docker compose -f deploy/docker/docker-compose.yml --profile test run --rm app-t
 pip install pre-commit && pre-commit install
 ```
 
+**Hasil yang diharapkan (sudah diverifikasi):**
+
+```text
+ruff check app tests       → All checks passed!
+ruff format --check app tests → all files formatted
+pytest                     → 59 passed, coverage 86% (gate CI: ≥80%)
+```
+
 > **Windows + uvicorn lokal:** uvicorn ≥0.36 memakai `ProactorEventLoop` yang ditolak
 > psycopg async (monitor DB & semua rute SQLAlchemy gagal — `InterfaceError`). Jalankan dengan:
 > `uvicorn app.main:app --loop app.core.loops:selector_loop_factory`
@@ -221,6 +249,13 @@ Semua keputusan desain ada di `docs/`, dibuat **sebelum kode** (prinsip: dokumen
 4. **Auditability** — setiap aksi menyisakan jejak: siapa, kapan, apa, alasan
 5. **Least privilege** — RBAC di setiap endpoint, auditor read-only
 
-## 📜 License
+## 🤝 Kontribusi
+
+1. Buat branch fitur dari `main` (Conventional Commits: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`).
+2. Pastikan hijau sebelum PR: `ruff check app tests && ruff format --check app tests && pytest`.
+3. Baca [`docs/CONVENTIONS.md`](docs/CONVENTIONS.md) — aturan Git, kode, DB, testing, logging.
+4. Jangan commit `.env`, secret, atau file `backups/` (sudah masuk `.gitignore`).
+
+## 📜 Lisensi
 
 MIT
